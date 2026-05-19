@@ -13,12 +13,13 @@ DEFAULT_PASSWORD="none"
 DEFAULT_REPO="https://github.com/VIKINGYFY/immortalwrt.git"
 DEFAULT_BRANCH="main"
 DEFAULT_SOURCE="VIKINGYFY/immortalwrt"
+DEFAULT_DOWNLOAD_MIRROR="https://mirrors.ustc.edu.cn/openwrt/sources;https://mirrors.ustc.edu.cn/lede/sources;https://mirror.sjtu.edu.cn/openwrt/sources;https://mirror2.immortalwrt.org/sources;https://sources.cdn.openwrt.org"
 MAX_CLONE_DEPTH=1
 APT_RETRIES=5
 APT_TIMEOUT_SECONDS=30
 HEARTBEAT_SECONDS=300
 BUILD_PACKAGES=(
-	ack antlr3 asciidoc autoconf automake autopoint bc binutils bison
+	ack antlr3 aria2 asciidoc autoconf automake autopoint bc binutils bison
 	build-essential bzip2 ca-certificates ccache cmake cpio curl
 	device-tree-compiler dos2unix ecj fakeroot fastjar file flex g++-multilib
 	gawk gcc-multilib genisoimage gettext git gperf help2man intltool jq
@@ -97,6 +98,9 @@ set_defaults() {
 	export WRT_SOURCE="${WRT_SOURCE:-$DEFAULT_SOURCE}"
 	export WRT_PACKAGE="${WRT_PACKAGE:-}"
 	export WRT_TEST="${WRT_TEST:-false}"
+	export DOWNLOAD_MIRROR="${DOWNLOAD_MIRROR:-$DEFAULT_DOWNLOAD_MIRROR}"
+	export DOWNLOAD_TOOL_CUSTOM="${DOWNLOAD_TOOL_CUSTOM:-aria2c}"
+	export ARIA2C_OPTIONS="${ARIA2C_OPTIONS:---max-tries=3 --timeout=30 --connect-timeout=10 --summary-interval=60}"
 	export CCACHE_DIR="$PROJECT_ROOT/.ccache"
 	CONFIG_FILE="$PROJECT_ROOT/Config/$WRT_CONFIG.txt"
 }
@@ -141,8 +145,6 @@ clone_source() {
 	WRT_HASH=$(git -C "$BUILD_DIR" log -1 --pretty=format:'%h')
 	export WRT_HASH
 
-	local mirrors_file="$BUILD_DIR/scripts/projectsmirrors.json"
-	[ -f "$mirrors_file" ] && sed -i '/.cn\//d; /tencent/d; /aliyun/d' "$mirrors_file"
 	rm -rf "$BUILD_DIR/dl"
 	ln -s "$DOWNLOAD_DIR" "$BUILD_DIR/dl"
 }
@@ -246,6 +248,8 @@ print_machine_info() {
 	echo "WRT_TARGET=$WRT_TARGET"
 	echo "WRT_DEVICE=$WRT_DEVICE"
 	echo "WRT_TEST=$WRT_TEST"
+	echo "DOWNLOAD_TOOL_CUSTOM=$DOWNLOAD_TOOL_CUSTOM"
+	echo "DOWNLOAD_MIRROR=$DOWNLOAD_MIRROR"
 	lscpu
 	make --version | head -n 1
 	df -h
