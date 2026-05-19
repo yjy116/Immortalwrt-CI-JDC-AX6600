@@ -52,6 +52,11 @@ if [ -d "./luci-app-athena-led" ]; then
 	fi
 fi
 
+if [ -d "./OpenWrt-nikki/mihomo-alpha" ] && [ -d "./OpenWrt-nikki/mihomo-meta" ]; then
+	echo "Removing OpenWrt-nikki/mihomo-alpha to avoid Kconfig recursion with mihomo-meta."
+	rm -rf ./OpenWrt-nikki/mihomo-alpha
+fi
+
 if [ -f "./luci-app-iperf3/Makefile" ]; then
 	sed -i 's#include ../../luci.mk#include $(TOPDIR)/feeds/luci/luci.mk#g' ./luci-app-iperf3/Makefile
 fi
