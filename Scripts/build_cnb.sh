@@ -14,6 +14,7 @@ DEFAULT_REPO="https://github.com/VIKINGYFY/immortalwrt.git"
 DEFAULT_BRANCH="main"
 DEFAULT_SOURCE="VIKINGYFY/immortalwrt"
 DEFAULT_DOWNLOAD_MIRROR="https://mirrors.ustc.edu.cn/openwrt/sources;https://mirrors.ustc.edu.cn/lede/sources;https://mirror.sjtu.edu.cn/openwrt/sources;https://mirror2.immortalwrt.org/sources;https://sources.cdn.openwrt.org"
+DEFAULT_DOWNLOAD_JOBS=8
 MAX_CLONE_DEPTH=1
 APT_RETRIES=5
 APT_TIMEOUT_SECONDS=30
@@ -99,6 +100,7 @@ set_defaults() {
 	export WRT_PACKAGE="${WRT_PACKAGE:-}"
 	export WRT_TEST="${WRT_TEST:-false}"
 	export DOWNLOAD_MIRROR="${DOWNLOAD_MIRROR:-$DEFAULT_DOWNLOAD_MIRROR}"
+	export DOWNLOAD_JOBS="${DOWNLOAD_JOBS:-$DEFAULT_DOWNLOAD_JOBS}"
 	export DOWNLOAD_TOOL_CUSTOM="${DOWNLOAD_TOOL_CUSTOM:-aria2c}"
 	export ARIA2C_OPTIONS="${ARIA2C_OPTIONS:---max-tries=3 --timeout=30 --connect-timeout=10 --summary-interval=60}"
 	export CCACHE_DIR="$PROJECT_ROOT/.ccache"
@@ -177,7 +179,7 @@ generate_config() {
 download_packages() {
 	[ "$WRT_TEST" != "true" ] || return 0
 	cd "$BUILD_DIR"
-	run_with_heartbeat "make download" make download -j"$(nproc)"
+	run_with_heartbeat "make download" make download -j"$DOWNLOAD_JOBS"
 }
 
 compile_firmware() {
@@ -249,6 +251,7 @@ print_machine_info() {
 	echo "WRT_DEVICE=$WRT_DEVICE"
 	echo "WRT_TEST=$WRT_TEST"
 	echo "DOWNLOAD_TOOL_CUSTOM=$DOWNLOAD_TOOL_CUSTOM"
+	echo "DOWNLOAD_JOBS=$DOWNLOAD_JOBS"
 	echo "DOWNLOAD_MIRROR=$DOWNLOAD_MIRROR"
 	lscpu
 	make --version | head -n 1
