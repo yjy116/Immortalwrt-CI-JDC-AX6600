@@ -7,7 +7,7 @@ An ImmortalWrt cloud build project for JDCloud Athena / JDC AX6600 (`jdcloud_re-
 
 ### 项目定位
 
-本仓库用于在 GitHub Actions 上自动编译京东云雅典娜 / JDC AX6600 固件。插件配置以 `yjy116/Immortalwrt-CI-GL-AXT1800` 为主，已移除 AXT1800 专用风扇控件，并结合 `VIKINGYFY/OpenWRT-CI` 与 `ones20250/Openwrt-AX6600` 中针对 AX6600 的 eMMC、LED、NSS、无线和分区工具设置。
+本仓库用于通过 GitHub Actions 和腾讯云 CNB 编译京东云雅典娜 / JDC AX6600 固件。插件配置以 `yjy116/Immortalwrt-CI-GL-AXT1800` 为主，已移除 AXT1800 专用风扇控件，并结合 `VIKINGYFY/OpenWRT-CI` 与 `ones20250/Openwrt-AX6600` 中针对 AX6600 的 eMMC、LED、NSS、无线和分区工具设置。
 
 ### 设备配置
 
@@ -29,7 +29,7 @@ An ImmortalWrt cloud build project for JDCloud Athena / JDC AX6600 (`jdcloud_re-
 - 保留高通平台相关处理：NSS feed 控制、NSS 固件版本设置、NSS init 启动顺序调整、`ARM64_BRBE` 关闭。
 - 保留 HomeProxy、OpenClash、daed、Tailscale、EasyTier、ZeroTier、Samba、AdGuardHome、SQM、TTYD 等常用插件。
 
-### 手动编译
+### GitHub Actions 手动编译
 
 1. 进入 GitHub Actions。
 2. 选择 `JDC-AX6600` workflow。
@@ -39,6 +39,16 @@ An ImmortalWrt cloud build project for JDCloud Athena / JDC AX6600 (`jdcloud_re-
 
 编译完成后，固件和最终 `.config` 会发布到 Releases。
 
+### 腾讯云 CNB 手动编译
+
+1. 将本仓库推送到 CNB 独立仓库。
+2. 进入 CNB 仓库 `main` 分支页面。
+3. 点击 `Build JDC AX6600 Firmware` 按钮。
+4. 如只想生成最终 `.config`，将 `Config-only test` 切到 `Generate config only`。
+5. 如需临时增删配置，在 `Extra config lines` 填入额外 `.config` 行。
+
+CNB 编译完成后，固件、最终 `.config` 和 `build-info.txt` 会上传到当前 commit 的附件。
+
 ### 自动编译
 
 `Auto-Build` 每 10 天检查一次 `VIKINGYFY/immortalwrt:main` 近期更新。检测到上游更新后，会先清理旧 Release 和 workflow 运行记录，再触发 `JDC-AX6600` 正式编译。
@@ -47,10 +57,14 @@ An ImmortalWrt cloud build project for JDCloud Athena / JDC AX6600 (`jdcloud_re-
 
 ```text
 .
+|-- .cnb.yml
+|-- .cnb/
+|   `-- web_trigger.yml
 |-- Config/
 |   |-- JDC-AX6600.txt
 |   `-- GENERAL.txt
 |-- Scripts/
+|   |-- build_cnb.sh
 |   |-- Handles.sh
 |   |-- Packages.sh
 |   |-- Settings.sh
@@ -72,7 +86,7 @@ An ImmortalWrt cloud build project for JDCloud Athena / JDC AX6600 (`jdcloud_re-
 
 ### Purpose
 
-This repository builds ImmortalWrt firmware for JDCloud Athena / JDC AX6600 through GitHub Actions. The package baseline follows `yjy116/Immortalwrt-CI-GL-AXT1800`, with the AXT1800 fan-control pieces removed. Device-specific settings for eMMC, LED, NSS, wireless tuning, and partition tools are merged from `VIKINGYFY/OpenWRT-CI` and `ones20250/Openwrt-AX6600`.
+This repository builds ImmortalWrt firmware for JDCloud Athena / JDC AX6600 through GitHub Actions and Tencent Cloud CNB. The package baseline follows `yjy116/Immortalwrt-CI-GL-AXT1800`, with the AXT1800 fan-control pieces removed. Device-specific settings for eMMC, LED, NSS, wireless tuning, and partition tools are merged from `VIKINGYFY/OpenWRT-CI` and `ones20250/Openwrt-AX6600`.
 
 ### Device
 
@@ -98,3 +112,5 @@ This repository builds ImmortalWrt firmware for JDCloud Athena / JDC AX6600 thro
 Run the `JDC-AX6600` workflow manually from GitHub Actions. Use `PACKAGE` to append temporary `.config` lines, and set `TEST` to `true` when you only want to generate the final config without compiling firmware.
 
 The generated firmware and final config are uploaded to GitHub Releases.
+
+For Tencent Cloud CNB, push the same repository to the CNB Git remote, open the `main` branch page, and click `Build JDC AX6600 Firmware`. CNB uploads firmware, the final `.config`, and `build-info.txt` to the current commit attachments.

@@ -1,0 +1,20 @@
+main:
+  web_trigger_build:
+    - name: Build JDC AX6600 firmware
+      runner:
+        tags: cnb:arch:amd64
+        cpus: 8
+      docker:
+        image: cnbcool/default-build-env:latest
+        volumes:
+          - ./dl
+          - ./.ccache
+      stages:
+        - name: Build firmware
+          script:
+            - bash Scripts/build_cnb.sh
+        - name: Upload artifacts
+          image: cnbcool/attachments:latest
+          settings:
+            attachments:
+              - "./artifacts/*"
