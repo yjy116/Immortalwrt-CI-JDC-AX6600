@@ -22,6 +22,11 @@ if [ -d *"homeproxy"* ]; then
 	cd "$PKG_PATH"
 fi
 
+homeproxy_makefile="../feeds/luci/applications/luci-app-homeproxy/Makefile"
+if [ -f "$homeproxy_makefile" ]; then
+	sed -i 's#+sing-box[[:space:]]*\\#+sing-box-tiny \\#g' "$homeproxy_makefile"
+fi
+
 if [ -d *"luci-theme-argon"* ]; then
 	cd ./luci-theme-argon/
 	sed -i "s/primary '.*'/primary '#31a1a1'/; s/'0.2'/'0.5'/; s/'none'/'bing'/; s/'600'/'normal'/" ./luci-app-argon-config/root/etc/config/argon
