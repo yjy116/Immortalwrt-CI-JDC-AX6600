@@ -19,6 +19,7 @@ MAX_CLONE_DEPTH=1
 APT_RETRIES=5
 APT_TIMEOUT_SECONDS=30
 HEARTBEAT_SECONDS=300
+HEARTBEAT_DIAGNOSTIC_LINES=40
 BUILD_PACKAGES=(
 	ack antlr3 aria2 asciidoc autoconf automake autopoint bc binutils bison
 	build-essential bzip2 ca-certificates ccache cmake cpio curl
@@ -60,6 +61,13 @@ apt_get() {
 		"$@"
 }
 
+print_heartbeat_diagnostics() {
+	echo "Active download processes:"
+	ps -eo pid,ppid,stat,etime,comm,args --sort=pid \
+		| awk 'NR == 1 || $5 ~ /^(make|curl|wget|aria2c|perl)$/ { print }' \
+		| tail -n "$HEARTBEAT_DIAGNOSTIC_LINES" || true
+}
+
 run_with_heartbeat() {
 	local label=$1
 	local pid
@@ -73,6 +81,7 @@ run_with_heartbeat() {
 		while sleep "$HEARTBEAT_SECONDS"; do
 			kill -0 "$pid" 2>/dev/null || exit 0
 			echo "Still running: $label"
+			[[ "$label" == *download* ]] && print_heartbeat_diagnostics
 		done
 	) &
 	heartbeat_pid=$!
