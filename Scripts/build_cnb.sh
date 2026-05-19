@@ -181,6 +181,7 @@ apply_customizations() {
 generate_config() {
 	cd "$BUILD_DIR"
 	cat "$CONFIG_FILE" "$PROJECT_ROOT/Config/GENERAL.txt" >> .config
+	echo "CONFIG_DOWNLOAD_TOOL_CUSTOM=\"$DOWNLOAD_TOOL_CUSTOM\"" >> .config
 	"$PROJECT_ROOT/Scripts/Settings.sh"
 	make defconfig -j"$(nproc)"
 }
