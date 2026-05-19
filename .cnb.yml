@@ -11,8 +11,10 @@ main:
           - ./.ccache
       stages:
         - name: Build firmware
-          script:
-            - bash Scripts/build_cnb.sh
+          jobs:
+            - name: Build firmware
+              timeout: 12h
+              script: bash Scripts/build_cnb.sh
         - name: Upload artifacts
           image: cnbcool/attachments:latest
           settings:

@@ -16,6 +16,7 @@ DEFAULT_SOURCE="VIKINGYFY/immortalwrt"
 MAX_CLONE_DEPTH=1
 APT_RETRIES=5
 APT_TIMEOUT_SECONDS=30
+HEARTBEAT_SECONDS=300
 BUILD_PACKAGES=(
 	ack antlr3 asciidoc autoconf automake autopoint bc binutils bison
 	build-essential bzip2 ca-certificates ccache cmake cpio curl
@@ -55,6 +56,31 @@ apt_get() {
 		-o Acquire::http::Timeout="$APT_TIMEOUT_SECONDS" \
 		-o Acquire::https::Timeout="$APT_TIMEOUT_SECONDS" \
 		"$@"
+}
+
+run_with_heartbeat() {
+	local label=$1
+	local pid
+	local heartbeat_pid
+	local exit_code
+
+	shift
+	"$@" &
+	pid=$!
+	(
+		while sleep "$HEARTBEAT_SECONDS"; do
+			kill -0 "$pid" 2>/dev/null || exit 0
+			echo "Still running: $label"
+		done
+	) &
+	heartbeat_pid=$!
+	set +e
+	wait "$pid"
+	exit_code=$?
+	set -e
+	kill "$heartbeat_pid" 2>/dev/null || true
+	wait "$heartbeat_pid" 2>/dev/null || true
+	return "$exit_code"
 }
 
 set_defaults() {
@@ -149,7 +175,7 @@ generate_config() {
 download_packages() {
 	[ "$WRT_TEST" != "true" ] || return 0
 	cd "$BUILD_DIR"
-	make download -j"$(nproc)"
+	run_with_heartbeat "make download" make download -j"$(nproc)"
 }
 
 compile_firmware() {
@@ -157,11 +183,11 @@ compile_firmware() {
 	cd "$BUILD_DIR"
 	find package/ -name Makefile -path "*/ubus/*" \
 		-exec sed -i 's/-Werror/-Wno-error=format-nonliteral/g' {} +
-	if make -j"$(nproc)"; then
+	if run_with_heartbeat "parallel firmware build" make -j"$(nproc)"; then
 		return 0
 	fi
 	echo "Parallel build failed. Running serial V=s once to expose the root cause." >&2
-	make -j1 V=s || true
+	run_with_heartbeat "serial firmware build with V=s" make -j1 V=s || true
 	return 1
 }
 
