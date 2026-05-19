@@ -1,0 +1,297 @@
+name: WRT-CORE
+
+on:
+  workflow_call:
+    inputs:
+      WRT_CONFIG:
+        required: true
+        type: string
+      WRT_THEME:
+        required: true
+        type: string
+      WRT_NAME:
+        required: true
+        type: string
+      WRT_SSID:
+        required: true
+        type: string
+      WRT_WORD:
+        required: true
+        type: string
+      WRT_IP:
+        required: true
+        type: string
+      WRT_PW:
+        required: true
+        type: string
+      WRT_REPO:
+        required: true
+        type: string
+      WRT_BRANCH:
+        required: true
+        type: string
+      WRT_SOURCE:
+        required: true
+        type: string
+      WRT_PACKAGE:
+        required: false
+        type: string
+      WRT_TEST:
+        required: false
+        type: boolean
+
+env:
+  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  WRT_CONFIG: ${{ inputs.WRT_CONFIG }}
+  WRT_THEME: ${{ inputs.WRT_THEME }}
+  WRT_NAME: ${{ inputs.WRT_NAME }}
+  WRT_SSID: ${{ inputs.WRT_SSID }}
+  WRT_WORD: ${{ inputs.WRT_WORD }}
+  WRT_IP: ${{ inputs.WRT_IP }}
+  WRT_PW: ${{ inputs.WRT_PW }}
+  WRT_REPO: ${{ inputs.WRT_REPO }}
+  WRT_BRANCH: ${{ inputs.WRT_BRANCH }}
+  WRT_SOURCE: ${{ inputs.WRT_SOURCE }}
+  WRT_PACKAGE: ${{ inputs.WRT_PACKAGE }}
+  WRT_TEST: ${{ inputs.WRT_TEST }}
+
+jobs:
+  core:
+    name: ${{ inputs.WRT_SOURCE }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout project
+        uses: actions/checkout@v5
+
+      - name: Free runner disk space
+        run: |
+          set -euxo pipefail
+
+          df -h
+          if swapon --show --noheadings | grep -q .; then
+            sudo swapoff -a
+          else
+            echo "No active swap found."
+          fi
+          for path in /mnt/swapfile /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/az /opt/microsoft /opt/google /opt/hostedtoolcache; do
+            if [ -e "$path" ]; then
+              sudo rm -rf "$path"
+            fi
+          done
+          sudo -E apt-get clean
+          df -h
+
+      - name: Initialize build environment
+        env:
+          DEBIAN_FRONTEND: noninteractive
+        run: |
+          set -euxo pipefail
+
+          sudo -E apt -yqq purge firefox
+          sudo -E apt -yqq update
+          sudo -E apt -yqq full-upgrade
+          sudo -E apt -yqq autoremove --purge
+          sudo -E apt -yqq autoclean
+          sudo -E apt -yqq clean
+          sudo -E apt -yqq install dos2unix libfuse-dev python3-netifaces
+          sudo bash -c 'bash <(curl -fsSL https://build-scripts.immortalwrt.org/init_build_environment.sh)'
+          sudo -E systemctl daemon-reload
+          sudo -E timedatectl set-timezone "Asia/Shanghai"
+
+          sudo mkdir -p /mnt/build_wrt
+          sudo chown "$USER:$USER" /mnt/build_wrt
+          ln -s /mnt/build_wrt "$GITHUB_WORKSPACE/wrt"
+
+      - name: Initialize values
+        run: |
+          set -euo pipefail
+
+          config_file="./Config/$WRT_CONFIG.txt"
+          wrt_target=$(grep -m 1 -oP '^CONFIG_TARGET_\K[\w]+(?=\=y)' "$config_file")
+          wrt_device=$(grep -m 1 -oP '^CONFIG_TARGET_DEVICE_[^=]+_DEVICE_\K[\w-]+(?=\=y)' "$config_file")
+
+          {
+            echo "WRT_DATE=$(TZ=UTC-8 date +"%y.%m.%d-%H.%M.%S")"
+            echo "WRT_MARK=${GITHUB_REPOSITORY%%/*}"
+            echo "WRT_INFO=${WRT_SOURCE%%/*}"
+            echo "WRT_TARGET=$wrt_target"
+            echo "WRT_DEVICE=$wrt_device"
+            echo "WRT_KVER=none"
+            echo "WRT_LIST=none"
+          } >> "$GITHUB_ENV"
+
+      - name: Clone source
+        run: |
+          set -euxo pipefail
+
+          git clone --depth=1 --single-branch --branch "$WRT_BRANCH" "$WRT_REPO" ./wrt/
+          cd ./wrt/
+          echo "WRT_HASH=$(git log -1 --pretty=format:'%h')" >> "$GITHUB_ENV"
+
+          project_mirrors_file="./scripts/projectsmirrors.json"
+          if [ -f "$project_mirrors_file" ]; then
+            sed -i '/.cn\//d; /tencent/d; /aliyun/d' "$project_mirrors_file"
+          fi
+
+      - name: Normalize scripts
+        run: |
+          set -euxo pipefail
+
+          find ./ -maxdepth 3 -type f -iregex ".*\(txt\|sh\)$" -exec dos2unix {} \; -exec chmod +x {} \;
+
+      - name: Restore download cache
+        id: restore-dl-cache
+        if: env.WRT_TEST != 'true'
+        uses: actions/cache/restore@v5
+        with:
+          key: ${{ env.WRT_CONFIG }}-${{ env.WRT_INFO }}-dl-${{ github.sha }}
+          restore-keys: ${{ env.WRT_CONFIG }}-${{ env.WRT_INFO }}-dl-
+          path: ./wrt/dl
+
+      - name: Restore build cache
+        id: restore-build-cache
+        if: env.WRT_TEST != 'true'
+        uses: actions/cache/restore@v5
+        with:
+          key: ${{ env.WRT_CONFIG }}-${{ env.WRT_INFO }}-build-${{ env.WRT_HASH }}
+          restore-keys: |
+            ${{ env.WRT_CONFIG }}-${{ env.WRT_INFO }}-build-
+            ${{ env.WRT_CONFIG }}-${{ env.WRT_INFO }}-
+          path: |
+            ./wrt/.ccache
+            ./wrt/staging_dir/host*
+            ./wrt/staging_dir/tool*
+
+      - name: Refresh restored cache stamps
+        if: env.WRT_TEST != 'true'
+        run: |
+          set -euxo pipefail
+
+          if [ -d "./wrt/staging_dir" ]; then
+            find "./wrt/staging_dir" -type d -name "stamp" -not -path "*target*" | while read -r dir; do
+              find "$dir" -type f -exec touch {} +
+            done
+            mkdir -p ./wrt/tmp
+            echo "1" > ./wrt/tmp/.build
+          fi
+
+      - name: Update feeds
+        run: |
+          set -euxo pipefail
+
+          cd ./wrt/
+          ./scripts/feeds update -a
+          ./scripts/feeds install -a
+
+      - name: Custom packages
+        run: |
+          set -euxo pipefail
+
+          cd ./wrt/package/
+          "$GITHUB_WORKSPACE/Scripts/Packages.sh"
+          "$GITHUB_WORKSPACE/Scripts/Handles.sh"
+
+      - name: Custom settings
+        run: |
+          set -euxo pipefail
+
+          cd ./wrt/
+          cat "$GITHUB_WORKSPACE/Config/$WRT_CONFIG.txt" "$GITHUB_WORKSPACE/Config/GENERAL.txt" >> .config
+          "$GITHUB_WORKSPACE/Scripts/Settings.sh"
+          make defconfig -j"$(nproc)"
+
+      - name: Warm build cache
+        if: env.WRT_TEST != 'true' && steps.restore-build-cache.outputs.cache-hit != 'true'
+        run: |
+          set -euxo pipefail
+
+          cd ./wrt/
+          make tools/install -j"$(nproc)"
+          make toolchain/install -j"$(nproc)"
+          make target/linux/compile -j"$(nproc)"
+
+      - name: Save build cache
+        if: env.WRT_TEST != 'true' && steps.restore-build-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v5
+        with:
+          key: ${{ env.WRT_CONFIG }}-${{ env.WRT_INFO }}-build-${{ env.WRT_HASH }}
+          path: |
+            ./wrt/.ccache
+            ./wrt/staging_dir/host*
+            ./wrt/staging_dir/tool*
+
+      - name: Download packages
+        if: env.WRT_TEST != 'true'
+        run: |
+          set -euxo pipefail
+
+          cd ./wrt/
+          make download -j"$(nproc)"
+
+      - name: Save download cache
+        if: env.WRT_TEST != 'true' && steps.restore-dl-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v5
+        with:
+          key: ${{ env.WRT_CONFIG }}-${{ env.WRT_INFO }}-dl-${{ github.sha }}
+          path: ./wrt/dl
+
+      - name: Compile firmware
+        if: env.WRT_TEST != 'true'
+        run: |
+          set -euxo pipefail
+
+          cd ./wrt/
+          find package/ -name Makefile -path "*/ubus/*" -exec sed -i 's/-Werror/-Wno-error=format-nonliteral/g' {} +
+          make -j"$(nproc)" || make -j1 V=s
+
+      - name: Machine information
+        run: |
+          set -euxo pipefail
+
+          cd ./wrt/
+          lscpu | grep -E "name|Core|Thread"
+          df -h
+          du -h --max-depth=1
+
+      - name: Package firmware
+        run: |
+          set -euxo pipefail
+
+          cd ./wrt/
+          mkdir -p ./upload/
+          cp -f ./.config "./upload/Config-$WRT_CONFIG-$WRT_INFO-$WRT_BRANCH-$WRT_DATE.txt"
+
+          if [[ "$WRT_TEST" != "true" ]]; then
+            echo "WRT_KVER=$(find ./bin/targets/ -type f -name "*.manifest" -exec grep -oP '^kernel - \K[\d\.]+' {} \; | head -n 1)" >> "$GITHUB_ENV"
+            echo "WRT_LIST=$(find ./bin/targets/ -type f -name "*.manifest" -exec grep -oP '^luci-(app|theme)[^ ]*' {} \; | sort -u | tr '\n' ' ')" >> "$GITHUB_ENV"
+
+            find ./bin/targets/ -type f -iname "*$WRT_DEVICE*" | while read -r file; do
+              base="$(basename "$file")"
+              ext="${base#*.}"
+              name="$(echo "$base" | grep -io "$WRT_DEVICE.*" | cut -d '.' -f 1)"
+              cp -f "$file" "./upload/$WRT_INFO-$WRT_BRANCH-$name-$WRT_DATE.$ext"
+            done
+
+            find ./bin/targets/ -type f \( -name "*.manifest" -o -name "*.buildinfo" -o -name "*sha256sums*" \) -exec cp -f {} ./upload/ \;
+            make clean -j"$(nproc)"
+          fi
+
+      - name: Release firmware
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.WRT_CONFIG }}-${{ env.WRT_INFO }}-${{ env.WRT_BRANCH }}-${{ env.WRT_DATE }}
+          files: ./wrt/upload/*.*
+          body: |
+            中文：京东云雅典娜 / JDC AX6600 (`jdcloud_re-cs-02`) 固件。
+            源码：${{ env.WRT_REPO }}；分支：${{ env.WRT_BRANCH }}；提交：${{ env.WRT_HASH }}
+            配置：${{ env.WRT_CONFIG }}；平台：${{ env.WRT_TARGET }}；设备：${{ env.WRT_DEVICE }}
+            登录地址：${{ env.WRT_IP }}；登录密码：${{ env.WRT_PW }}
+            WIFI 名称：${{ env.WRT_SSID }}；WIFI 密码：${{ env.WRT_WORD }}
+            内核版本：${{ env.WRT_KVER }}；LuCI 插件：${{ env.WRT_LIST }}
+
+            English: Firmware for JDCloud Athena / JDC AX6600 (`jdcloud_re-cs-02`).
+            Source: ${{ env.WRT_REPO }}; branch: ${{ env.WRT_BRANCH }}; commit: ${{ env.WRT_HASH }}
+            Config: ${{ env.WRT_CONFIG }}; target: ${{ env.WRT_TARGET }}; device: ${{ env.WRT_DEVICE }}
+            Login address: ${{ env.WRT_IP }}; login password: ${{ env.WRT_PW }}
+            Wi-Fi SSID: ${{ env.WRT_SSID }}; Wi-Fi password: ${{ env.WRT_WORD }}
+            Kernel: ${{ env.WRT_KVER }}; LuCI packages: ${{ env.WRT_LIST }}

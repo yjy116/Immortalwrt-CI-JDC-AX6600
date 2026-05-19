@@ -1,0 +1,42 @@
+name: JDC-AX6600
+
+on:
+  workflow_dispatch:
+    inputs:
+      PACKAGE:
+        description: "Append custom .config lines. Use \\n between multiple lines."
+        required: false
+        type: string
+      TEST:
+        description: "Generate and release the config only, without compiling firmware."
+        default: false
+        required: false
+        type: boolean
+
+permissions: write-all
+
+jobs:
+  config:
+    name: ${{ matrix.CONFIG }}
+    strategy:
+      fail-fast: false
+      matrix:
+        CONFIG: [JDC-AX6600]
+        SOURCE: [VIKINGYFY/immortalwrt]
+        BRANCH: [main]
+
+    uses: ./.github/workflows/WRT-CORE.yml
+    secrets: inherit
+    with:
+      WRT_CONFIG: ${{ matrix.CONFIG }}
+      WRT_THEME: aurora
+      WRT_NAME: JDC-AX6600
+      WRT_SSID: JDC-AX6600
+      WRT_WORD: "77915558"
+      WRT_IP: 192.168.8.1
+      WRT_PW: none
+      WRT_REPO: https://github.com/${{ matrix.SOURCE }}.git
+      WRT_BRANCH: ${{ matrix.BRANCH }}
+      WRT_SOURCE: ${{ matrix.SOURCE }}
+      WRT_PACKAGE: ${{ inputs.PACKAGE }}
+      WRT_TEST: ${{ inputs.TEST }}

@@ -1,0 +1,6 @@
+# JDCloud Athena / JDC AX6600 (jdcloud_re-cs-02)
+CONFIG_TARGET_qualcommax=y
+CONFIG_TARGET_qualcommax_ipq60xx=y
+
+# Device profile
+CONFIG_TARGET_DEVICE_qualcommax_ipq60xx_DEVICE_jdcloud_re-cs-02=y
