@@ -49,6 +49,8 @@ An ImmortalWrt cloud build project for JDCloud Athena / JDC AX6600 (`jdcloud_re-
 
 CNB 编译完成后，固件、最终 `.config` 和 `build-info.txt` 会上传到当前 commit 的附件。
 
+CNB 构建入口使用 `amd64` 最大规格：`64` 核 CPU，内存按 CNB 规则约为 `128G`。
+
 ### 自动编译
 
 `Auto-Build` 每 10 天检查一次 `VIKINGYFY/immortalwrt:main` 近期更新。检测到上游更新后，会先清理旧 Release 和 workflow 运行记录，再触发 `JDC-AX6600` 正式编译。
@@ -114,3 +116,5 @@ Run the `JDC-AX6600` workflow manually from GitHub Actions. Use `PACKAGE` to app
 The generated firmware and final config are uploaded to GitHub Releases.
 
 For Tencent Cloud CNB, push the same repository to the CNB Git remote, open the `main` branch page, and click `Build JDC AX6600 Firmware`. CNB uploads firmware, the final `.config`, and `build-info.txt` to the current commit attachments.
+
+The CNB build entry uses the maximum `amd64` runner size: `64` CPU cores and about `128G` memory by CNB's allocation rule.

@@ -14,6 +14,21 @@ DEFAULT_REPO="https://github.com/VIKINGYFY/immortalwrt.git"
 DEFAULT_BRANCH="main"
 DEFAULT_SOURCE="VIKINGYFY/immortalwrt"
 MAX_CLONE_DEPTH=1
+APT_RETRIES=5
+APT_TIMEOUT_SECONDS=30
+BUILD_PACKAGES=(
+	ack antlr3 asciidoc autoconf automake autopoint bc binutils bison
+	build-essential bzip2 ca-certificates ccache cmake cpio curl
+	device-tree-compiler dos2unix ecj fakeroot fastjar file flex g++-multilib
+	gawk gcc-multilib genisoimage gettext git gperf help2man intltool jq
+	libelf-dev libfuse-dev libglib2.0-dev libgmp3-dev libltdl-dev libmpc-dev
+	libmpfr-dev libncurses-dev libreadline-dev libssl-dev libtool libyaml-dev
+	libz-dev lrzsz make msmtp nano ninja-build p7zip-full patch pkgconf
+	python3 python3-netifaces python3-pip python3-ply python3-pyelftools
+	python3-requests qemu-utils quilt re2c rsync scons sharutils squashfs-tools
+	subversion swig tar texinfo uglifyjs unzip wget xmlto xxd xz-utils
+	zlib1g-dev zstd
+)
 
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 PROJECT_ROOT=$(cd "$SCRIPT_DIR/.." && pwd)
@@ -32,6 +47,14 @@ run_privileged() {
 		return 1
 	}
 	sudo -E "$@"
+}
+
+apt_get() {
+	run_privileged apt-get \
+		-o Acquire::Retries="$APT_RETRIES" \
+		-o Acquire::http::Timeout="$APT_TIMEOUT_SECONDS" \
+		-o Acquire::https::Timeout="$APT_TIMEOUT_SECONDS" \
+		"$@"
 }
 
 set_defaults() {
@@ -54,11 +77,10 @@ set_defaults() {
 
 install_dependencies() {
 	export DEBIAN_FRONTEND=noninteractive
-	run_privileged apt-get update
-	run_privileged apt-get install -y --no-install-recommends \
-		ca-certificates curl dos2unix file git jq libfuse-dev \
-		python3-netifaces rsync
-	run_privileged bash -c 'bash <(curl -fsSL https://build-scripts.immortalwrt.org/init_build_environment.sh)'
+	apt_get update
+	apt_get install -y --no-install-recommends "${BUILD_PACKAGES[@]}"
+	command -v make >/dev/null || { echo "make is required but was not installed." >&2; return 1; }
+	command -v xz >/dev/null || { echo "xz is required but was not installed." >&2; return 1; }
 }
 
 init_values() {
@@ -194,7 +216,12 @@ EOF
 
 print_machine_info() {
 	cd "$BUILD_DIR"
+	echo "WRT_CONFIG=$WRT_CONFIG"
+	echo "WRT_TARGET=$WRT_TARGET"
+	echo "WRT_DEVICE=$WRT_DEVICE"
+	echo "WRT_TEST=$WRT_TEST"
 	lscpu
+	make --version | head -n 1
 	df -h
 	du -h --max-depth=1
 }

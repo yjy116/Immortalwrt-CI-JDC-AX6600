@@ -16,7 +16,6 @@ branch:
           WRT_REPO: https://github.com/VIKINGYFY/immortalwrt.git
           WRT_BRANCH: main
           WRT_SOURCE: VIKINGYFY/immortalwrt
-          WRT_TEST: "false"
         inputs:
           WRT_TEST:
             name: Config-only test
