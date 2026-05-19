@@ -14,8 +14,8 @@ An ImmortalWrt cloud build project for JDCloud Athena / JDC AX6600 (`jdcloud_re-
 - 设备：京东云雅典娜 / JDC AX6600
 - OpenWrt profile：`jdcloud_re-cs-02`
 - Target：`qualcommax/ipq60xx`
-- 默认地址：`192.168.8.1`
-- 默认 Wi-Fi：`JDC-AX6600`
+- 默认地址：`192.168.101.1`
+- 默认 Wi-Fi：`Athena`
 - 默认 Wi-Fi 密码：`77915558`
 - 默认主题：`aurora`
 
@@ -25,6 +25,7 @@ An ImmortalWrt cloud build project for JDCloud Athena / JDC AX6600 (`jdcloud_re-
 - 添加 `luci-app-qbittorrent`，并从 `sbwml/luci-app-qbittorrent` 拉取插件源码。
 - 添加雅典娜 LED 屏控制插件 `luci-app-athena-led`，并补齐构建所需的 `find_button` 辅助脚本。
 - 添加 eMMC / 分区扩容 / 自动挂载相关组件：`block-mount`、`kmod-mmc`、`kmod-sdhci-msm`、`resize2fs`、`tune2fs` 等。
+- 补齐 `ones20250/Openwrt-AX6600` 中启用而本仓库缺少的插件和包，包括 Sentinel、ARP bind、firewall4、NSS 驱动组、`athena-led-control`、`iptasn`、`iperf3`、OpenSSL 与 USB QMI 相关模块。
 - 保留高通平台相关处理：NSS feed 控制、NSS 固件版本设置、NSS init 启动顺序调整、`ARM64_BRBE` 关闭。
 - 保留 HomeProxy、OpenClash、daed、Tailscale、EasyTier、ZeroTier、Samba、AdGuardHome、SQM、TTYD 等常用插件。
 
@@ -78,8 +79,8 @@ This repository builds ImmortalWrt firmware for JDCloud Athena / JDC AX6600 thro
 - Device: JDCloud Athena / JDC AX6600
 - OpenWrt profile: `jdcloud_re-cs-02`
 - Target: `qualcommax/ipq60xx`
-- Default address: `192.168.8.1`
-- Default Wi-Fi SSID: `JDC-AX6600`
+- Default address: `192.168.101.1`
+- Default Wi-Fi SSID: `Athena`
 - Default Wi-Fi password: `77915558`
 - Default theme: `aurora`
 
@@ -89,6 +90,7 @@ This repository builds ImmortalWrt firmware for JDCloud Athena / JDC AX6600 thro
 - Adds qBittorrent through `luci-app-qbittorrent` from `sbwml/luci-app-qbittorrent`.
 - Adds Athena LED screen support through `luci-app-athena-led` and a build-time `find_button` helper.
 - Adds eMMC, partition expansion, and automount packages such as `block-mount`, `kmod-mmc`, `kmod-sdhci-msm`, `resize2fs`, and `tune2fs`.
+- Adds plugin/package selections enabled by `ones20250/Openwrt-AX6600` but missing here, including Sentinel, ARP bind, firewall4, NSS driver packages, `athena-led-control`, `iptasn`, `iperf3`, OpenSSL, and USB QMI modules.
 - Keeps Qualcomm platform handling for NSS feed control, NSS firmware version, NSS init order, and `ARM64_BRBE` disablement.
 
 ### Build
