@@ -22,8 +22,15 @@ update_package() {
 	git clone --depth=1 --single-branch --branch "$pkg_branch" "https://github.com/$pkg_repo.git"
 
 	if [[ "$pkg_special" == "pkg" ]]; then
-		find "./$repo_name"/*/ -maxdepth 3 -type d -iname "*$pkg_name*" -prune -exec cp -rf {} ./ \;
+		local tmp_dir
+		local pkg_dir
+		tmp_dir=$(mktemp -d)
+		pkg_dir=$(find "./$repo_name" -mindepth 2 -maxdepth 4 -type f -name Makefile -path "*$pkg_name*" -printf '%h\n' | head -n 1)
+		[ -n "$pkg_dir" ] || { echo "Package directory not found: $pkg_name in $repo_name" >&2; exit 1; }
+		cp -rf "$pkg_dir" "$tmp_dir/"
 		rm -rf "./$repo_name/"
+		cp -rf "$tmp_dir/$(basename "$pkg_dir")" ./
+		rm -rf "$tmp_dir"
 		return
 	fi
 
@@ -78,7 +85,7 @@ update_package "luci-app-tailscale" "asvow/luci-app-tailscale" "main"
 
 update_package "ddns-go" "sirpdboy/luci-app-ddns-go" "main"
 update_package "diskman" "sbwml/luci-app-diskman" "main"
-update_package "luci-app-mini-diskmanager" "4IceG/luci-app-mini-diskmanager" "main"
+update_package "luci-app-mini-diskmanager" "4IceG/luci-app-mini-diskmanager" "main" "pkg"
 update_package "easytier" "EasyTier/luci-app-easytier" "main"
 update_package "luci-app-iperf3" "Gevatter-Tod/luci-app-iperf3" "main"
 update_package "netwizard" "sirpdboy/luci-app-netwizard" "main"
