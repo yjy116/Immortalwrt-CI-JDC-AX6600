@@ -22,6 +22,50 @@ apply_sed_to_matches() {
 	done
 }
 
+set_sysctl_value() {
+	local key=$1
+	local value=$2
+	local file=$3
+	local escaped_key=${key//./\\.}
+	sed -i "/^${escaped_key}=/d" "$file"
+	echo "$key=$value" >> "$file"
+}
+
+ensure_min_sysctl_value() {
+	local key=$1
+	local min_value=$2
+	local file=$3
+	local escaped_key=${key//./\\.}
+	local current_value
+
+	current_value=$(sed -n "s/^${escaped_key}=\\([0-9]\\+\\).*/\\1/p" "$file")
+	if [ -z "$current_value" ] || [ "$current_value" -lt "$min_value" ]; then
+		set_sysctl_value "$key" "$min_value" "$file"
+	fi
+}
+
+write_network_accel_defaults() {
+	local defaults_dir="./package/base-files/files/etc/uci-defaults"
+	local defaults_file="$defaults_dir/99-jdc-ax6600-network-accel"
+	mkdir -p "$defaults_dir"
+cat > "$defaults_file" <<'EOF'
+#!/bin/sh
+set -e
+
+uci -q set network.globals='globals'
+uci -q set network.globals.packet_steering='1'
+uci -q commit network
+
+uci -q set irqbalance.irqbalance='irqbalance'
+uci -q set irqbalance.irqbalance.enabled='1'
+uci -q commit irqbalance
+[ -x /etc/init.d/irqbalance ] && /etc/init.d/irqbalance enable
+
+exit 0
+EOF
+	chmod +x "$defaults_file"
+}
+
 apply_sed_to_matches "./feeds/luci/collections/" "Makefile" "/attendedsysupgrade/d"
 apply_sed_to_matches "./feeds/luci/collections/" "Makefile" "s/luci-theme-bootstrap/luci-theme-$WRT_THEME/g"
 apply_sed_to_matches "./feeds/luci/modules/luci-mod-system/" "flash.js" "s/192\\.168\\.[0-9]*\\.[0-9]*/$WRT_IP/g"
@@ -63,11 +107,11 @@ if [[ "${WRT_TARGET^^}" == *"QUALCOMMAX"* ]]; then
 	echo "CONFIG_FEED_sqm_scripts_nss=n" >> ./.config
 	echo "CONFIG_NSS_FIRMWARE_VERSION_12_5=y" >> ./.config
 	echo "CONFIG_PACKAGE_kmod-usb-serial-qualcomm=y" >> ./.config
+	write_network_accel_defaults
 fi
 
 sysctl_file="./package/base-files/files/etc/sysctl.conf"
-current_min_free=$(sed -n 's/^vm\.min_free_kbytes=\([0-9]\+\).*/\1/p' "$sysctl_file")
-if [ -z "$current_min_free" ] || [ "$current_min_free" -lt 16384 ]; then
-	sed -i '/^vm\.min_free_kbytes=/d' "$sysctl_file"
-	echo "vm.min_free_kbytes=16384" >> "$sysctl_file"
-fi
+min_free_kbytes=16384
+ensure_min_sysctl_value "vm.min_free_kbytes" "$min_free_kbytes" "$sysctl_file"
+set_sysctl_value "net.core.default_qdisc" "fq" "$sysctl_file"
+set_sysctl_value "net.ipv4.tcp_congestion_control" "bbr" "$sysctl_file"
