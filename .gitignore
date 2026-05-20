@@ -1,9 +1,2 @@
-.codex-tasks/
-wrt/
-dl/
-artifacts/
-.ccache/
-*.log
-*.tmp
-.DS_Store
-Thumbs.db
+/wrt
+/.idea

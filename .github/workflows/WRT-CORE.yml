@@ -1,5 +1,5 @@
-# 云编译公用核心
-name: 固件编译核心
+#云编译公用核心
+name: WRT-CORE
 
 on:
   workflow_call:
@@ -57,7 +57,6 @@ env:
   WRT_PW: ${{inputs.WRT_PW}}
   WRT_REPO: ${{inputs.WRT_REPO}}
   WRT_BRANCH: ${{inputs.WRT_BRANCH}}
-  WRT_SOURCE: ${{inputs.WRT_SOURCE}}
   WRT_PACKAGE: ${{inputs.WRT_PACKAGE}}
   WRT_TEST: ${{inputs.WRT_TEST}}
   WRT_DIR: 'wrt'
@@ -128,7 +127,6 @@ jobs:
           echo "WRT_MARK=${GITHUB_REPOSITORY%%/*}" >> $GITHUB_ENV
           echo "WRT_INFO=${WRT_SOURCE%%/*}" >> $GITHUB_ENV
           echo "WRT_TARGET=$(grep -m 1 -oP '^CONFIG_TARGET_\K[\w]+(?=\=y)' ./Config/$WRT_CONFIG.txt)" >> $GITHUB_ENV
-          echo "WRT_DEVICE=$(grep -m 1 -oP '^CONFIG_TARGET_DEVICE_[^=]+_DEVICE_\K[\w-]+(?=\=y)' ./Config/$WRT_CONFIG.txt)" >> $GITHUB_ENV
           echo "WRT_KVER=none" >> $GITHUB_ENV
           echo "WRT_LIST=none" >> $GITHUB_ENV
 
@@ -165,7 +163,7 @@ jobs:
             find "./wrt/staging_dir" -type d -name "stamp" -not -path "*target*" | while read -r dir; do
                 find "$dir" -type f -exec touch {} +
             done
-          fi
+          fi            
 
 
 
@@ -187,9 +185,9 @@ jobs:
         run: |
           . $GITHUB_WORKSPACE/Scripts/function.sh
           cd ./wrt/
-
+          
           generate_config && cat .config
-
+          
           $GITHUB_WORKSPACE/Scripts/Settings.sh
 
           make defconfig -j$(nproc) && make clean -j$(nproc)
@@ -261,32 +259,24 @@ jobs:
           tag_name: ${{env.CI_NAME}}-${{env.WRT_CONFIG}}_${{env.WRT_DATE}}
           files: ./wrt/upload/*.*
           body: |
-            中文：京东云雅典娜 / JDC AX6600 (`jdcloud_re-cs-02`) DaeWRT 大分区固件。
-            说明：本仓库以 davidtall/DaeWRT-CI 为模板基座，构建时将 `KERNEL_SIZE` 从 `6144k` 调整为 `12288k`，请确认设备已经刷入大分区补丁后再使用。
+            这是个平台固件包，内含多个设备！
+            请注意选择你需要的设备固件！
+            不要问，刷就完事了！
+
+            全系带开源硬件加速，别问了！
+
             源码：${{env.WRT_REPO}}
             分支：${{env.WRT_BRANCH}}
             提交：${{env.WRT_HASH}}
+
             配置：${{env.WRT_CONFIG}}
             平台：${{env.WRT_TARGET}}
-            设备：${{env.WRT_DEVICE}}
+
             登录地址：${{env.WRT_IP}}
             登录密码：${{env.WRT_PW}}
-            WIFI 名称：${{env.WRT_SSID}}
-            WIFI 密码：${{env.WRT_WORD}}
+
+            WIFI名称：${{env.WRT_SSID}}
+            WIFI密码：${{env.WRT_WORD}}
+
             内核版本：${{env.WRT_KVER}}
             插件列表：${{env.WRT_LIST}}
-
-            English: DaeWRT large-partition firmware for JDCloud Athena / JDC AX6600 (`jdcloud_re-cs-02`).
-            Note: this repository uses davidtall/DaeWRT-CI as the base template and changes build-time `KERNEL_SIZE` from `6144k` to `12288k`. Flash it only after applying the large-partition patch on the device.
-            Source: ${{env.WRT_REPO}}
-            Branch: ${{env.WRT_BRANCH}}
-            Commit: ${{env.WRT_HASH}}
-            Config: ${{env.WRT_CONFIG}}
-            Target: ${{env.WRT_TARGET}}
-            Device: ${{env.WRT_DEVICE}}
-            Login address: ${{env.WRT_IP}}
-            Login password: ${{env.WRT_PW}}
-            Wi-Fi SSID: ${{env.WRT_SSID}}
-            Wi-Fi password: ${{env.WRT_WORD}}
-            Kernel: ${{env.WRT_KVER}}
-            LuCI packages: ${{env.WRT_LIST}}
