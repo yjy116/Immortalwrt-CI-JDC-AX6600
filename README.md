@@ -28,3 +28,13 @@ workflows——自定义CI配置
 Scripts——自定义脚本
 
 Config——自定义配置
+
+# 本仓库追加插件
+
+在 darkrain88/daed-immWRT-CI-david 基板上，额外启用以下插件：
+
+- luci-app-qbittorrent
+- luci-app-tailscale
+- luci-app-easytier
+- luci-app-usb-printer
+- luci-app-adguardhome
