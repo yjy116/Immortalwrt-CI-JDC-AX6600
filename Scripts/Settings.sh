@@ -1,117 +1,78 @@
 #!/bin/bash
-# SPDX-License-Identifier: MIT
+. $(dirname "$(realpath "$0")")/function.sh
+#移除luci-app-attendedsysupgrade
+sed -i "/attendedsysupgrade/d" $(find ./feeds/luci/collections/ -type f -name "Makefile")
+#修改默认主题
+sed -i "s/luci-theme-bootstrap/luci-theme-$WRT_THEME/g" $(find ./feeds/luci/collections/ -type f -name "Makefile")
+#修改immortalwrt.lan关联IP
+sed -i "s/192\.168\.[0-9]*\.[0-9]*/$WRT_IP/g" $(find ./feeds/luci/modules/luci-mod-system/ -type f -name "flash.js")
+#添加编译日期标识
+sed -i "s/(\(luciversion || ''\))/(\1) + (' \/ DaeWRT-$WRT_DATE')/g" $(find ./feeds/luci/modules/luci-mod-status/ -type f -name "10_system.js")
 
-set -euo pipefail
-
-disable_kernel_option() {
-	local option=$1
-	local config_dir=$2
-	[ -d "$config_dir" ] || return 0
-	find "$config_dir" -maxdepth 1 -type f -name "config-*" | while read -r config_file; do
-		sed -i "/^CONFIG_${option}=\\|^# CONFIG_${option} is not set/d" "$config_file"
-		echo "# CONFIG_${option} is not set" >> "$config_file"
-	done
-}
-
-apply_sed_to_matches() {
-	local search_dir=$1
-	local file_name=$2
-	local sed_expr=$3
-	find "$search_dir" -type f -name "$file_name" 2>/dev/null | while read -r target_file; do
-		sed -i "$sed_expr" "$target_file"
-	done
-}
-
-set_sysctl_value() {
-	local key=$1
-	local value=$2
-	local file=$3
-	local escaped_key=${key//./\\.}
-	sed -i "/^${escaped_key}=/d" "$file"
-	echo "$key=$value" >> "$file"
-}
-
-ensure_min_sysctl_value() {
-	local key=$1
-	local min_value=$2
-	local file=$3
-	local escaped_key=${key//./\\.}
-	local current_value
-
-	current_value=$(sed -n "s/^${escaped_key}=\\([0-9]\\+\\).*/\\1/p" "$file")
-	if [ -z "$current_value" ] || [ "$current_value" -lt "$min_value" ]; then
-		set_sysctl_value "$key" "$min_value" "$file"
-	fi
-}
-
-write_network_accel_defaults() {
-	local defaults_dir="./package/base-files/files/etc/uci-defaults"
-	local defaults_file="$defaults_dir/99-jdc-ax6600-network-accel"
-	mkdir -p "$defaults_dir"
-cat > "$defaults_file" <<'EOF'
-#!/bin/sh
-set -e
-
-uci -q set network.globals='globals'
-uci -q set network.globals.packet_steering='1'
-uci -q commit network
-
-uci -q set irqbalance.irqbalance='irqbalance'
-uci -q set irqbalance.irqbalance.enabled='1'
-uci -q commit irqbalance
-[ -x /etc/init.d/irqbalance ] && /etc/init.d/irqbalance enable
-
-exit 0
-EOF
-	chmod +x "$defaults_file"
-}
-
-apply_sed_to_matches "./feeds/luci/collections/" "Makefile" "/attendedsysupgrade/d"
-apply_sed_to_matches "./feeds/luci/collections/" "Makefile" "s/luci-theme-bootstrap/luci-theme-$WRT_THEME/g"
-apply_sed_to_matches "./feeds/luci/modules/luci-mod-system/" "flash.js" "s/192\\.168\\.[0-9]*\\.[0-9]*/$WRT_IP/g"
-apply_sed_to_matches "./feeds/luci/modules/luci-mod-status/" "10_system.js" "s/(\\(luciversion || ''\\))/(\\1) + (' \\/ $WRT_MARK-$WRT_DATE')/g"
-
-wifi_sh=$(find ./target/linux/{mediatek/filogic,qualcommax}/base-files/etc/uci-defaults/ -type f -name "*set-wireless.sh" 2>/dev/null | head -n 1)
-wifi_uc="./package/network/config/wifi-scripts/files/lib/wifi/mac80211.uc"
-if [ -n "$wifi_sh" ]; then
-	sed -i "s/BASE_SSID='.*'/BASE_SSID='$WRT_SSID'/g" "$wifi_sh"
-	sed -i "s/BASE_WORD='.*'/BASE_WORD='$WRT_WORD'/g" "$wifi_sh"
-elif [ -f "$wifi_uc" ]; then
-	sed -i "s/ssid='.*'/ssid='$WRT_SSID'/g" "$wifi_uc"
-	sed -i "s/key='.*'/key='$WRT_WORD'/g" "$wifi_uc"
-	sed -i "s/country='.*'/country='CN'/g" "$wifi_uc"
-	sed -i "s/encryption='.*'/encryption='psk2+ccmp'/g" "$wifi_uc"
+WIFI_SH=$(find ./target/linux/{mediatek/filogic,qualcommax}/base-files/etc/uci-defaults/ -type f -name "*set-wireless.sh" 2>/dev/null)
+WIFI_UC="./package/network/config/wifi-scripts/files/lib/wifi/mac80211.uc"
+if [ -f "$WIFI_SH" ]; then
+	#修改WIFI名称
+	sed -i "s/BASE_SSID='.*'/BASE_SSID='$WRT_SSID'/g" $WIFI_SH
+	#修改WIFI密码
+	sed -i "s/BASE_WORD='.*'/BASE_WORD='$WRT_WORD'/g" $WIFI_SH
+elif [ -f "$WIFI_UC" ]; then
+	#修改WIFI名称
+	sed -i "s/ssid='.*'/ssid='$WRT_SSID'/g" $WIFI_UC
+	#修改WIFI密码
+	sed -i "s/key='.*'/key='$WRT_WORD'/g" $WIFI_UC
+	#修改WIFI地区
+	sed -i "s/country='.*'/country='CN'/g" $WIFI_UC
+	#修改WIFI加密
+	sed -i "s/encryption='.*'/encryption='psk2+ccmp'/g" $WIFI_UC
 fi
 
-cfg_file="./package/base-files/files/bin/config_generate"
-sed -i "s/192\.168\.[0-9]*\.[0-9]*/$WRT_IP/g" "$cfg_file"
-sed -i "s/hostname='.*'/hostname='$WRT_NAME'/g" "$cfg_file"
+CFG_FILE="./package/base-files/files/bin/config_generate"
+#修改默认IP地址
+sed -i "s/192\.168\.[0-9]*\.[0-9]*/$WRT_IP/g" $CFG_FILE
+#修改默认主机名
+sed -i "s/hostname='.*'/hostname='$WRT_NAME'/g" $CFG_FILE
 
+vlmcsd_patches="./feeds/packages/net/vlmcsd/patches/"
+mkdir -p $vlmcsd_patches && cp -f ../patches/001-fix_compile_with_ccache.patch $vlmcsd_patches
+
+sed -i 's/mirrors.vsean.net\/openwrt/mirror.nju.edu.cn\/immortalwrt/g' ./package/emortal/default-settings/files/99-default-settings-chinese
+
+#配置文件修改
 echo "CONFIG_PACKAGE_luci=y" >> ./.config
 echo "CONFIG_LUCI_LANG_zh_Hans=y" >> ./.config
 echo "CONFIG_PACKAGE_luci-theme-$WRT_THEME=y" >> ./.config
-echo "CONFIG_PACKAGE_luci-app-$WRT_THEME-config=y" >> ./.config
+#echo "CONFIG_PACKAGE_luci-app-$WRT_THEME-config=y" >> ./.config
 
-if [ -f "$GITHUB_WORKSPACE/Config/PRIVATE.txt" ]; then
-	cat "$GITHUB_WORKSPACE/Config/PRIVATE.txt" >> ./.config
-fi
-
-if [ -n "${WRT_PACKAGE:-}" ]; then
+#手动调整的插件
+if [ -n "$WRT_PACKAGE" ]; then
 	echo -e "$WRT_PACKAGE" >> ./.config
 fi
 
+#高通平台调整
+DTS_PATH="./target/linux/qualcommax/dts/"
 if [[ "${WRT_TARGET^^}" == *"QUALCOMMAX"* ]]; then
-	disable_kernel_option "ARM64_BRBE" "./target/linux/qualcommax"
-	disable_kernel_option "ARM64_BRBE" "./target/linux/qualcommax/ipq60xx"
+	#取消nss相关feed
 	echo "CONFIG_FEED_nss_packages=n" >> ./.config
 	echo "CONFIG_FEED_sqm_scripts_nss=n" >> ./.config
-	echo "CONFIG_NSS_FIRMWARE_VERSION_12_5=y" >> ./.config
+	#开启sqm-nss插件
+	echo "CONFIG_PACKAGE_luci-app-sqm=y" >> ./.config
+	echo "CONFIG_PACKAGE_sqm-scripts-nss=y" >> ./.config
+	#设置NSS版本
+	echo "CONFIG_NSS_FIRMWARE_VERSION_11_4=n" >> ./.config
+	if [[ "${WRT_CONFIG,,}" == *"ipq50"* ]]; then
+		echo "CONFIG_NSS_FIRMWARE_VERSION_12_2=y" >> ./.config
+	else
+		echo "CONFIG_NSS_FIRMWARE_VERSION_12_5=y" >> ./.config
+	fi
+	#无WIFI配置调整Q6大小
+	if [[ "${WRT_CONFIG,,}" == *"wifi"* && "${WRT_CONFIG,,}" == *"no"* ]]; then
+		find $DTS_PATH -type f ! -iname '*nowifi*' -exec sed -i 's/ipq\(6018\|8074\).dtsi/ipq\1-nowifi.dtsi/g' {} +
+		echo "qualcommax set up nowifi successfully!"
+	fi
+	#其他调整
 	echo "CONFIG_PACKAGE_kmod-usb-serial-qualcomm=y" >> ./.config
-	write_network_accel_defaults
 fi
-
-sysctl_file="./package/base-files/files/etc/sysctl.conf"
-min_free_kbytes=16384
-ensure_min_sysctl_value "vm.min_free_kbytes" "$min_free_kbytes" "$sysctl_file"
-set_sysctl_value "net.core.default_qdisc" "fq" "$sysctl_file"
-set_sysctl_value "net.ipv4.tcp_congestion_control" "bbr" "$sysctl_file"
+#亚瑟修复USB2.0日志报错问题
+#wget -qO - https://github.com/davidtall/immortalwrt/commit/ce39feb4.patch | patch -p1
+#cat ./target/linux/qualcommax/dts/ipq6000-re-ss-01.dts

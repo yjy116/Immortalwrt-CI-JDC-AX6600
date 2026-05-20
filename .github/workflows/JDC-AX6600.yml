@@ -1,14 +1,15 @@
-name: 京东云雅典娜固件
+# CI 项目
+name: 京东云雅典娜 DaeWRT 大分区固件
 
 on:
   workflow_dispatch:
     inputs:
       PACKAGE:
-        description: "Append custom .config lines. Use \\n between multiple lines."
+        description: "手动追加 .config 配置，多行请用换行分隔。"
         required: false
         type: string
       TEST:
-        description: "Generate and release the config only, without compiling firmware."
+        description: "仅生成配置文件，不编译固件。"
         default: false
         required: false
         type: boolean
@@ -33,10 +34,11 @@ jobs:
       WRT_NAME: JDC-AX6600
       WRT_SSID: Athena
       WRT_WORD: "77915558"
-      WRT_IP: 192.168.101.1
+      WRT_IP: 192.168.80.1
       WRT_PW: none
       WRT_REPO: https://github.com/${{ matrix.SOURCE }}.git
       WRT_BRANCH: ${{ matrix.BRANCH }}
       WRT_SOURCE: ${{ matrix.SOURCE }}
       WRT_PACKAGE: ${{ inputs.PACKAGE }}
       WRT_TEST: ${{ inputs.TEST }}
+      CI_NAME: 京东云雅典娜-DaeWRT

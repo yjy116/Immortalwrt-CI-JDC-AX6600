@@ -1,3 +1,4 @@
+# 云编译公用核心
 name: 固件编译核心
 
 on:
@@ -31,253 +32,261 @@ on:
         required: true
         type: string
       WRT_SOURCE:
-        required: true
+        required: false
         type: string
       WRT_PACKAGE:
         required: false
         type: string
       WRT_TEST:
         required: false
-        type: boolean
-
+        type: string
+      CI_NAME:
+        required: false
+        type: string
+      WRT_ARCH:
+        required: false
+        type: string
 env:
-  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-  WRT_CONFIG: ${{ inputs.WRT_CONFIG }}
-  WRT_THEME: ${{ inputs.WRT_THEME }}
-  WRT_NAME: ${{ inputs.WRT_NAME }}
-  WRT_SSID: ${{ inputs.WRT_SSID }}
-  WRT_WORD: ${{ inputs.WRT_WORD }}
-  WRT_IP: ${{ inputs.WRT_IP }}
-  WRT_PW: ${{ inputs.WRT_PW }}
-  WRT_REPO: ${{ inputs.WRT_REPO }}
-  WRT_BRANCH: ${{ inputs.WRT_BRANCH }}
-  WRT_SOURCE: ${{ inputs.WRT_SOURCE }}
-  WRT_PACKAGE: ${{ inputs.WRT_PACKAGE }}
-  WRT_TEST: ${{ inputs.WRT_TEST }}
+  GITHUB_TOKEN: ${{secrets.GITHUB_TOKEN}}
+  WRT_CONFIG: ${{inputs.WRT_CONFIG}}
+  WRT_THEME: ${{inputs.WRT_THEME}}
+  WRT_NAME: ${{inputs.WRT_NAME}}
+  WRT_SSID: ${{inputs.WRT_SSID}}
+  WRT_WORD: ${{inputs.WRT_WORD}}
+  WRT_IP: ${{inputs.WRT_IP}}
+  WRT_PW: ${{inputs.WRT_PW}}
+  WRT_REPO: ${{inputs.WRT_REPO}}
+  WRT_BRANCH: ${{inputs.WRT_BRANCH}}
+  WRT_SOURCE: ${{inputs.WRT_SOURCE}}
+  WRT_PACKAGE: ${{inputs.WRT_PACKAGE}}
+  WRT_TEST: ${{inputs.WRT_TEST}}
+  WRT_DIR: 'wrt'
+  CI_NAME: ${{inputs.CI_NAME}}
+  WRT_ARCH: ${{inputs.WRT_ARCH}}
 
 jobs:
   core:
-    name: 编译 ${{ inputs.WRT_SOURCE }}
+    name: ${{inputs.WRT_SOURCE}}
     runs-on: ubuntu-latest
-    timeout-minutes: 360
-    concurrency:
-      group: firmware-${{ inputs.WRT_CONFIG }}-${{ inputs.WRT_SOURCE }}-${{ inputs.WRT_BRANCH }}
-      cancel-in-progress: true
     steps:
-      - name: 检出项目
-        uses: actions/checkout@v5
-
-      - name: 释放构建空间
-        run: |
-          set -euxo pipefail
-
-          df -h
-          if swapon --show --noheadings | grep -q .; then
-            sudo swapoff -a
-          else
-            echo "No active swap found."
-          fi
-          for path in /mnt/swapfile /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/az /opt/microsoft /opt/google /opt/hostedtoolcache; do
-            if [ -e "$path" ]; then
-              sudo rm -rf "$path"
-            fi
-          done
-          sudo -E apt-get clean
-          df -h
-
-      - name: 初始化编译环境
+      - name: Install BC
         env:
           DEBIAN_FRONTEND: noninteractive
         run: |
-          set -euxo pipefail
+          sudo -E apt -yqq install bc
 
+      - name: Free Disk Space
+        uses: endersonmenezes/free-disk-space@v2
+        with:
+          remove_android: true
+          remove_dotnet: true
+          remove_haskell: true
+          remove_tool_cache: true
+          remove_swap: true
+          remove_packages: "azure-cli google-cloud-cli microsoft-edge-stable google-chrome-stable firefox postgresql* temurin-* *llvm* mysql* dotnet-sdk-*"
+          remove_packages_one_command: true
+          remove_folders: "/usr/share/swift /usr/share/miniconda /usr/share/az* /usr/share/glade* /usr/local/share/chromium /usr/local/share/powershell"
+          testing: false
+
+      - name: Checkout Projects
+        uses: actions/checkout@main
+      - name: Initialization Environment
+        env:
+          DEBIAN_FRONTEND: noninteractive
+        run: |
           sudo -E apt -yqq purge firefox
           sudo -E apt -yqq update
           sudo -E apt -yqq full-upgrade
           sudo -E apt -yqq autoremove --purge
           sudo -E apt -yqq autoclean
           sudo -E apt -yqq clean
-          sudo -E apt -yqq install dos2unix libfuse-dev python3-netifaces
-          sudo bash -c 'bash <(curl -fsSL https://build-scripts.immortalwrt.org/init_build_environment.sh)'
+          sudo -E apt -yqq install dos2unix python3-netifaces libfuse-dev
+          dos2unix "$GITHUB_WORKSPACE/Scripts/init_build_environment.sh"
+          sudo bash "$GITHUB_WORKSPACE/Scripts/init_build_environment.sh"
           sudo -E systemctl daemon-reload
           sudo -E timedatectl set-timezone "Asia/Shanghai"
-
-          sudo mkdir -p /mnt/build_wrt
-          sudo chown "$USER:$USER" /mnt/build_wrt
-          ln -s /mnt/build_wrt "$GITHUB_WORKSPACE/wrt"
-
-      - name: 初始化变量
-        run: |
-          set -euo pipefail
-
-          config_file="./Config/$WRT_CONFIG.txt"
-          wrt_target=$(grep -m 1 -oP '^CONFIG_TARGET_\K[\w]+(?=\=y)' "$config_file")
-          wrt_device=$(grep -m 1 -oP '^CONFIG_TARGET_DEVICE_[^=]+_DEVICE_\K[\w-]+(?=\=y)' "$config_file")
-
-          {
-            echo "WRT_DATE=$(TZ=UTC-8 date +"%y.%m.%d-%H.%M.%S")"
-            echo "WRT_MARK=${GITHUB_REPOSITORY%%/*}"
-            echo "WRT_INFO=${WRT_SOURCE%%/*}"
-            echo "WRT_TARGET=$wrt_target"
-            echo "WRT_DEVICE=$wrt_device"
-            echo "WRT_KVER=none"
-            echo "WRT_LIST=none"
-          } >> "$GITHUB_ENV"
-
-      - name: 克隆源码
-        run: |
-          set -euxo pipefail
-
-          git clone --depth=1 --single-branch --branch "$WRT_BRANCH" "$WRT_REPO" ./wrt/
-          cd ./wrt/
-          echo "WRT_HASH=$(git log -1 --pretty=format:'%h')" >> "$GITHUB_ENV"
-
-          project_mirrors_file="./scripts/projectsmirrors.json"
-          if [ -f "$project_mirrors_file" ]; then
-            sed -i '/.cn\//d; /tencent/d; /aliyun/d' "$project_mirrors_file"
+          if command -v go >/dev/null 2>&1; then
+            echo "GO_INSTALLED=true" >> "$GITHUB_ENV"
+          else
+            echo "GO_INSTALLED=false" >> "$GITHUB_ENV"
           fi
+#          sudo chown $USER:$GROUPS $GITHUB_WORKSPACE
+#          sudo mkdir -p /mnt/build_wrt
+#          sudo chown $USER:$USER /mnt/build_wrt
+#          sudo ln -s /mnt/build_wrt $GITHUB_WORKSPACE/wrt
 
-      - name: 规范化脚本
+      - name: Setup Go
+        if: env.GO_INSTALLED != 'true'
+        uses: actions/setup-go@v6
+        with:
+          go-version: '1.26'
+      - run: go version
+
+      - name: Initialization Values
         run: |
-          set -euxo pipefail
+          echo "WRT_DATE=$(TZ=UTC-8 date +"%y.%m.%d-%H.%M.%S")" >> $GITHUB_ENV
+          echo "WRT_MARK=${GITHUB_REPOSITORY%%/*}" >> $GITHUB_ENV
+          echo "WRT_INFO=${WRT_SOURCE%%/*}" >> $GITHUB_ENV
+          echo "WRT_TARGET=$(grep -m 1 -oP '^CONFIG_TARGET_\K[\w]+(?=\=y)' ./Config/$WRT_CONFIG.txt)" >> $GITHUB_ENV
+          echo "WRT_DEVICE=$(grep -m 1 -oP '^CONFIG_TARGET_DEVICE_[^=]+_DEVICE_\K[\w-]+(?=\=y)' ./Config/$WRT_CONFIG.txt)" >> $GITHUB_ENV
+          echo "WRT_KVER=none" >> $GITHUB_ENV
+          echo "WRT_LIST=none" >> $GITHUB_ENV
 
+          echo "WRT_CI=$WRT_CI" >> $GITHUB_ENV
+          [[ -z $WRT_ARCH ]] && {
+            export WRT_ARCH=$(sed -n 's/.*_DEVICE_\(.*\)_DEVICE_.*/\1/p' $GITHUB_WORKSPACE/Config/$WRT_CONFIG.txt | head -n 1)
+            echo "WRT_ARCH=$WRT_ARCH" >> $GITHUB_ENV
+          }
+          echo "$WRT_REPO/$WRT_BRANCH" > "$GITHUB_WORKSPACE/repo_flag"
+      - name: Clone Code
+        run: |
+          git clone --depth=1 --single-branch --branch $WRT_BRANCH $WRT_REPO ./wrt/
+
+          cd ./wrt/ && echo "WRT_HASH=$(git log -1 --pretty=format:'%h')" >> $GITHUB_ENV
+
+      - name: Check Scripts
+        run: |
           find ./ -maxdepth 3 -type f -iregex ".*\(txt\|sh\)$" -exec dos2unix {} \; -exec chmod +x {} \;
 
-      - name: 恢复下载缓存
-        id: restore-dl-cache
-        if: env.WRT_TEST != 'true'
-        uses: actions/cache/restore@v5
+      - name: Cache Dependencies
+        uses: actions/cache@v4
         with:
-          key: ${{ env.WRT_CONFIG }}-${{ env.WRT_INFO }}-dl-${{ github.sha }}
-          restore-keys: ${{ env.WRT_CONFIG }}-${{ env.WRT_INFO }}-dl-
-          path: ./wrt/dl
-
-      - name: 恢复构建缓存
-        id: build-cache
-        if: env.WRT_TEST != 'true'
-        uses: actions/cache@v5
-        with:
-          key: ${{ env.WRT_CONFIG }}-${{ env.WRT_INFO }}-build-${{ env.WRT_HASH }}
-          restore-keys: |
-            ${{ env.WRT_CONFIG }}-${{ env.WRT_INFO }}-build-
-            ${{ env.WRT_CONFIG }}-${{ env.WRT_INFO }}-
           path: |
             ./wrt/.ccache
-            ./wrt/staging_dir/host*
-            ./wrt/staging_dir/tool*
+            ./wrt/staging_dir
+          key: ${{ env.WRT_ARCH }}-${{ hashFiles('**/repo_flag') }}-${{ env.WRT_DATE }}
+          restore-keys: |
+            ${{ env.WRT_ARCH }}-${{ hashFiles('**/repo_flag') }}-
+            ${{ env.WRT_ARCH }}-
 
-      - name: 刷新缓存时间戳
-        if: env.WRT_TEST != 'true'
+      - name: Refresh the cache
         run: |
-          set -euxo pipefail
-
           if [ -d "./wrt/staging_dir" ]; then
             find "./wrt/staging_dir" -type d -name "stamp" -not -path "*target*" | while read -r dir; do
-              find "$dir" -type f -exec touch {} +
+                find "$dir" -type f -exec touch {} +
             done
-            mkdir -p ./wrt/tmp
-            echo "1" > ./wrt/tmp/.build
           fi
 
-      - name: 更新 feeds
-        run: |
-          set -euxo pipefail
 
+
+      - name: Update Feeds
+        run: |
           cd ./wrt/
+
           ./scripts/feeds update -a
           ./scripts/feeds install -a
 
-      - name: 自定义插件
+      - name: Custom Packages
         run: |
-          set -euxo pipefail
-
           cd ./wrt/package/
-          "$GITHUB_WORKSPACE/Scripts/Packages.sh"
-          "$GITHUB_WORKSPACE/Scripts/Handles.sh"
 
-      - name: 生成编译配置
+          $GITHUB_WORKSPACE/Scripts/Packages.sh
+          $GITHUB_WORKSPACE/Scripts/Handles.sh
+
+      - name: Custom Settings
         run: |
-          set -euxo pipefail
-
+          . $GITHUB_WORKSPACE/Scripts/function.sh
           cd ./wrt/
-          cat "$GITHUB_WORKSPACE/Config/$WRT_CONFIG.txt" "$GITHUB_WORKSPACE/Config/GENERAL.txt" >> .config
-          "$GITHUB_WORKSPACE/Scripts/Settings.sh"
-          make defconfig -j"$(nproc)"
 
-      - name: 下载源码包
+          generate_config && cat .config
+
+          $GITHUB_WORKSPACE/Scripts/Settings.sh
+
+          make defconfig -j$(nproc) && make clean -j$(nproc)
+
+      - name: Download Packages
         if: env.WRT_TEST != 'true'
         run: |
-          set -euxo pipefail
-
           cd ./wrt/
-          make download -j"$(nproc)"
 
-      - name: 保存下载缓存
-        if: env.WRT_TEST != 'true' && steps.restore-dl-cache.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v5
-        with:
-          key: ${{ env.WRT_CONFIG }}-${{ env.WRT_INFO }}-dl-${{ github.sha }}
-          path: ./wrt/dl
+          make download -j$(nproc)
 
-      - name: 编译固件
+      - name: Compile Firmware
         if: env.WRT_TEST != 'true'
         run: |
-          set -euxo pipefail
-
           cd ./wrt/
-          find package/ -name Makefile -path "*/ubus/*" -exec sed -i 's/-Werror/-Wno-error=format-nonliteral/g' {} +
-          make -j"$(nproc)" || make -j1 V=s
 
-      - name: 输出机器信息
+          make -j$(nproc) || make -j1 V=s
+
+      - name: Delete Old Cache
         run: |
-          set -euxo pipefail
+          # 获取缓存列表并删除
+          gh cache list --key ${{ env.WRT_ARCH }}-${{ hashFiles('**/repo_flag') }}- --json key --jq '.[] | .key' | while read -r key; do
+            gh cache delete "$key"
+          done
+          # 输出缓存状态
+          echo "========cache status========"
+          echo "ccache: $(du -sh ./wrt/.ccache | cut -f 1)"
+          echo "staging: $(du -sh ./wrt/staging_dir | cut -f 1)"
 
+      - name: Machine Information
+        run: |
           cd ./wrt/
+
+          echo "======================="
           lscpu | grep -E "name|Core|Thread"
+          echo "======================="
           df -h
+          echo "======================="
           du -h --max-depth=1
+          echo "======================="
 
-      - name: 打包固件
+      - name: Package Firmware
         run: |
-          set -euxo pipefail
+          cd ./wrt/ && mkdir ./upload/
 
-          cd ./wrt/
-          mkdir -p ./upload/
-          cp -f ./.config "./upload/Config-$WRT_CONFIG-$WRT_INFO-$WRT_BRANCH-$WRT_DATE.txt"
+          cp -f ./.config ./upload/Config-"$WRT_CONFIG"-"$WRT_INFO"-"$WRT_BRANCH"-"$WRT_DATE".txt
 
-          if [[ "$WRT_TEST" != "true" ]]; then
-            echo "WRT_KVER=$(find ./bin/targets/ -type f -name "*.manifest" -exec grep -oP '^kernel - \K[\d\.]+' {} \; | head -n 1)" >> "$GITHUB_ENV"
-            echo "WRT_LIST=$(find ./bin/targets/ -type f -name "*.manifest" -exec grep -oP '^luci-(app|theme)[^ ]*' {} \; | sort -u | tr '\n' ' ')" >> "$GITHUB_ENV"
+          if [[ $WRT_TEST != 'true' ]]; then
+            echo "WRT_KVER=$(find ./bin/targets/ -type f -name "*.manifest" -exec grep -oP '^kernel - \K[\d\.]+' {} \;)" >> $GITHUB_ENV
+            echo "WRT_LIST=$(find ./bin/targets/ -type f -name "*.manifest" -exec grep -oP '^luci-(app|theme)[^ ]*' {} \; | tr '\n' ' ')" >> $GITHUB_ENV
 
-            find ./bin/targets/ -type f -iname "*$WRT_DEVICE*" | while read -r file; do
-              base="$(basename "$file")"
-              ext="${base#*.}"
-              name="$(echo "$base" | grep -io "$WRT_DEVICE.*" | cut -d '.' -f 1)"
-              cp -f "$file" "./upload/$WRT_INFO-$WRT_BRANCH-$name-$WRT_DATE.$ext"
+            find ./bin/targets/ -iregex ".*\(buildinfo\|json\|sha256sums\|packages\)$" -exec rm -rf {} +
+
+            for FILE in $(find ./bin/targets/ -type f -iname "*$WRT_TARGET*") ; do
+              EXT=$(basename $FILE | cut -d '.' -f 2-)
+              NAME=$(basename $FILE | cut -d '.' -f 1 | grep -io "\($WRT_TARGET\).*")
+              NEW_FILE="$NAME"-"$WRT_DATE"."$EXT"
+              mv -f $FILE ./upload/$NEW_FILE
             done
 
-            find ./bin/targets/ -type f \( -name "*.manifest" -o -name "*.buildinfo" -o -name "*sha256sums*" \) -exec cp -f {} ./upload/ \;
-            make clean -j"$(nproc)"
+            find ./bin/targets/ -type f -exec mv -f {} ./upload/ \;
+
+            make clean -j$(nproc)
           fi
 
-      - name: 发布固件
-        uses: softprops/action-gh-release@v2
+      - name: Release Firmware
+        uses: softprops/action-gh-release@master
         with:
-          tag_name: ${{ env.WRT_CONFIG }}-${{ env.WRT_INFO }}-${{ env.WRT_BRANCH }}-${{ env.WRT_DATE }}
+          tag_name: ${{env.CI_NAME}}-${{env.WRT_CONFIG}}_${{env.WRT_DATE}}
           files: ./wrt/upload/*.*
           body: |
-            中文：京东云雅典娜 / JDC AX6600 (`jdcloud_re-cs-02`) 标准 6MiB Kernel 固件。
-            说明：为适配默认 `KERNEL_SIZE=6144k`，已精简 daed/eBPF/BTF 内核调试组合。
-            源码：${{ env.WRT_REPO }}；分支：${{ env.WRT_BRANCH }}；提交：${{ env.WRT_HASH }}
-            配置：${{ env.WRT_CONFIG }}；平台：${{ env.WRT_TARGET }}；设备：${{ env.WRT_DEVICE }}
-            登录地址：${{ env.WRT_IP }}；登录密码：${{ env.WRT_PW }}
-            WIFI 名称：${{ env.WRT_SSID }}；WIFI 密码：${{ env.WRT_WORD }}
-            内核版本：${{ env.WRT_KVER }}；LuCI 插件：${{ env.WRT_LIST }}
+            中文：京东云雅典娜 / JDC AX6600 (`jdcloud_re-cs-02`) DaeWRT 大分区固件。
+            说明：本仓库以 davidtall/DaeWRT-CI 为模板基座，构建时将 `KERNEL_SIZE` 从 `6144k` 调整为 `12288k`，请确认设备已经刷入大分区补丁后再使用。
+            源码：${{env.WRT_REPO}}
+            分支：${{env.WRT_BRANCH}}
+            提交：${{env.WRT_HASH}}
+            配置：${{env.WRT_CONFIG}}
+            平台：${{env.WRT_TARGET}}
+            设备：${{env.WRT_DEVICE}}
+            登录地址：${{env.WRT_IP}}
+            登录密码：${{env.WRT_PW}}
+            WIFI 名称：${{env.WRT_SSID}}
+            WIFI 密码：${{env.WRT_WORD}}
+            内核版本：${{env.WRT_KVER}}
+            插件列表：${{env.WRT_LIST}}
 
-            English: Standard 6 MiB Kernel firmware for JDCloud Athena / JDC AX6600 (`jdcloud_re-cs-02`).
-            Note: daed/eBPF/BTF kernel debug features are trimmed to fit the default `KERNEL_SIZE=6144k` limit.
-            Source: ${{ env.WRT_REPO }}; branch: ${{ env.WRT_BRANCH }}; commit: ${{ env.WRT_HASH }}
-            Config: ${{ env.WRT_CONFIG }}; target: ${{ env.WRT_TARGET }}; device: ${{ env.WRT_DEVICE }}
-            Login address: ${{ env.WRT_IP }}; login password: ${{ env.WRT_PW }}
-            Wi-Fi SSID: ${{ env.WRT_SSID }}; Wi-Fi password: ${{ env.WRT_WORD }}
-            Kernel: ${{ env.WRT_KVER }}; LuCI packages: ${{ env.WRT_LIST }}
+            English: DaeWRT large-partition firmware for JDCloud Athena / JDC AX6600 (`jdcloud_re-cs-02`).
+            Note: this repository uses davidtall/DaeWRT-CI as the base template and changes build-time `KERNEL_SIZE` from `6144k` to `12288k`. Flash it only after applying the large-partition patch on the device.
+            Source: ${{env.WRT_REPO}}
+            Branch: ${{env.WRT_BRANCH}}
+            Commit: ${{env.WRT_HASH}}
+            Config: ${{env.WRT_CONFIG}}
+            Target: ${{env.WRT_TARGET}}
+            Device: ${{env.WRT_DEVICE}}
+            Login address: ${{env.WRT_IP}}
+            Login password: ${{env.WRT_PW}}
+            Wi-Fi SSID: ${{env.WRT_SSID}}
+            Wi-Fi password: ${{env.WRT_WORD}}
+            Kernel: ${{env.WRT_KVER}}
+            LuCI packages: ${{env.WRT_LIST}}

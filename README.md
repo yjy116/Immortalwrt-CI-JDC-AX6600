@@ -1,142 +1,114 @@
 # ImmortalWrt CI for JDCloud Athena / JDC AX6600
 
-京东云雅典娜 / JDC AX6600 (`jdcloud_re-cs-02`) 的 ImmortalWrt GitHub Actions 编译项目。
+本仓库用于通过 GitHub Actions 编译京东云雅典娜 / JDC AX6600 (`jdcloud_re-cs-02`) 固件。
 
-An ImmortalWrt GitHub Actions build project for JDCloud Athena / JDC AX6600 (`jdcloud_re-cs-02`).
+当前路线以 [davidtall/DaeWRT-CI](https://github.com/davidtall/DaeWRT-CI) 为模板基座，保留模板原有 daed、dae、nikki、eBPF、NSS、SKB recycler、IPQ60XX-WIFI 等配置，再追加本仓库需要的 JDC AX6600 单设备、大分区和插件配置。
 
-## 中文说明
-
-### 项目定位
-
-本仓库用于通过 GitHub Actions 编译京东云雅典娜 / JDC AX6600 标准 6MiB Kernel 固件。插件配置以 `yjy116/Immortalwrt-CI-GL-AXT1800` 为主，已移除 AXT1800 专用风扇控件，并结合 `VIKINGYFY/OpenWRT-CI`、`ones20250/Openwrt-AX6600` 与 `iamdjofoburs/Openwrt-AX6600` 中针对 AX6600 的 eMMC、LED、NSS、无线和分区工具设置。
-
-### 设备配置
+## 设备配置
 
 - 设备：京东云雅典娜 / JDC AX6600
 - OpenWrt profile：`jdcloud_re-cs-02`
 - Target：`qualcommax/ipq60xx`
-- 固件类型：标准 6MiB Kernel 固件，使用上游默认 `KERNEL_SIZE=6144k`
-- 默认地址：`192.168.101.1`
+- 固件类型：大分区固件，构建时把 `KERNEL_SIZE` 从 `6144k` 调整为 `12288k`
+- 默认地址：`192.168.80.1`
 - 默认 Wi-Fi：`Athena`
 - 默认 Wi-Fi 密码：`77915558`
 - 默认主题：`aurora`
 
-### 已启用的重点内容
+## 大分区提醒
 
-- 保留 AXT1800 仓库的主要插件配置，去除 `luci-app-fancontrol` 与相关风扇控件。
-- 添加 `luci-app-qbittorrent`，并从 `sbwml/luci-app-qbittorrent` 拉取插件源码。
-- 添加雅典娜 LED 屏控制插件 `luci-app-athena-led`，并补齐构建所需的 `find_button` 辅助脚本。
-- 添加 eMMC、分区扩容、自动挂载相关组件，包括 `block-mount`、`kmod-mmc`、`kmod-sdhci-msm`、`resize2fs`、`tune2fs` 等。
-- 补齐 `ones20250/Openwrt-AX6600` 中启用而本仓库缺少的插件和包，包括 Sentinel、ARP bind、firewall4、NSS 驱动组、`athena-led-control`、`iptasn`、`iperf3`、OpenSSL 与 USB QMI 相关模块。
-- 保留高通平台相关处理：NSS feed 控制、NSS 固件版本设置、NSS init 启动顺序调整、`ARM64_BRBE` 关闭。
-- 为适配默认 6MiB `uImage.itb` 限制，精简 daed/eBPF/BTF 调试组合并启用内核体积优化。
-- 保留 HomeProxy、OpenClash、sing-box-tiny、Tailscale、EasyTier、ZeroTier、Samba、AdGuardHome、SQM、TTYD 等常用插件。
+本仓库默认构建 12MiB Kernel 大分区固件，适合已经刷入京东云雅典娜大分区补丁的设备。
 
-### Kernel 体积说明
+如果设备仍是原始 6MiB Kernel 分区，请不要直接刷入本仓库生成的 `.bin` 固件。
 
-京东云雅典娜 `jdcloud_re-cs-02` 上游镜像定义默认 `KERNEL_SIZE=6144k`。`daed` 会引入 eBPF/BTF/XDP/KPROBE 等内核调试能力，容易让 `uImage.itb` 超过 6MiB，因此本仓库默认关闭 daed 主包及其 BPF/BTF 内核组合，优先保证标准分区 `.bin` 固件可以生成。
+## 模板保留内容
 
-### GitHub Actions 手动编译
+已同步 DaeWRT-CI 的主要模板文件：
 
-1. 进入 GitHub Actions。
-2. 选择 `京东云雅典娜固件` workflow。
+- `Config/GENERAL.txt`
+- `Config/IPQ60XX-WIFI.txt`
+- `Config/IPQ60XX-NOWIFI.txt`
+- `Config/IPQ807X-WIFI.txt`
+- `Config/IPQ807X-NOWIFI.txt`
+- `Config/MEDIATEK.txt`
+- `Config/ROCKCHIP.txt`
+- `Config/X86.txt`
+- `Scripts/function.sh`
+- `Scripts/Settings.sh`
+- `Scripts/Packages.sh`
+- `Scripts/Handles.sh`
+- `Scripts/init_build_environment.sh`
+- `package/dae`
+- `package/luci-app-dae`
+- `package/v2ray-geodata`
+- `patches/`
+- `files/`
+- `tests/`
+- `diy.sh`
+
+`Config/JDC-AX6600.txt` 是在 DaeWRT `IPQ60XX-WIFI` 思路上追加的单设备配置，只编译 `jdcloud_re-cs-02`，避免把模板中的全部 IPQ60XX 设备一起编译。
+
+## 追加插件
+
+在不删减 DaeWRT 模板配置的基础上，额外启用：
+
+- `luci-app-qbittorrent`
+- `luci-app-mini-diskmanager`
+- `luci-app-mountd`
+- `luci-app-partexp`
+- `luci-app-samba4`
+- `luci-app-homeproxy`
+- `luci-app-openclash`
+- `luci-app-adguardhome`
+- `luci-app-tailscale`
+- `luci-app-easytier`
+- `luci-app-usb-printer`
+
+同步补充的底包包括：
+
+- `qbittorrent`
+- `parted`
+- `mountd`
+- `resize2fs`
+- `tune2fs`
+- `losetup`
+- `samba4-server`
+- `wsdd2`
+- `adguardhome`
+- `tailscale`
+- `easytier`
+- `p910nd`
+- `kmod-usb-printer`
+
+说明：`luci-app-mountd` 在当前 ImmortalWrt 主线 feed 中未检索到明确 LuCI 包，本仓库仍按需求保留该配置，并补入 `mountd` 底包。若上游确实没有该 LuCI 包，`make defconfig` 会在最终配置中体现出来。
+
+## GitHub Actions 编译
+
+1. 进入仓库的 GitHub Actions 页面。
+2. 选择 `京东云雅典娜 DaeWRT 大分区固件`。
 3. 点击 `Run workflow`。
-4. 如需临时增删配置，在 `PACKAGE` 输入框填入额外 `.config` 行，多行使用换行分隔。
-5. 如只想生成配置文件，将 `TEST` 设为 `true`。
+4. `PACKAGE` 可临时追加 `.config` 行，多行使用换行分隔。
+5. `TEST=true` 时只生成最终配置，不编译固件。
 
 编译完成后，固件和最终 `.config` 会发布到 GitHub Releases。
 
-### GitHub Actions 缓存
+## 缓存清理
 
-默认不需要定期清理 cache。GitHub 会自动淘汰长期未访问的缓存，仓库缓存也有容量限制；正常情况下保留缓存可以明显减少重复下载和工具链构建时间。
+默认不需要定期清理 cache。正常保留 cache 可以减少重复下载和工具链构建时间。
 
-如果遇到以下情况，可以手动运行 `一键清理缓存` workflow，把本仓库的 GitHub Actions cache 全部清掉：
+如果遇到缓存损坏、上游大改、工具链污染、错误位置不稳定等情况，可以手动运行 `一键清理缓存` workflow。它只删除 GitHub Actions cache，不会删除 Releases、固件产物、源码文件、workflow 运行记录或仓库内容。
 
-- Actions 日志出现 cache restore/save 失败、缓存损坏或磁盘空间不足。
-- 上游源码、工具链或 target 发生较大变化，怀疑旧缓存导致异常。
-- 多次编译失败且错误位置不稳定，需要先排除脏缓存影响。
+## 参考来源
 
-操作方式：
-
-1. 进入 GitHub Actions。
-2. 选择 `一键清理缓存` workflow。
-3. 点击 `Run workflow`。
-4. 清理完成后，再运行 `京东云雅典娜固件` workflow 重新编译。
-
-`一键清理缓存` 只删除 GitHub Actions cache，不会删除 Releases、固件产物、源码文件、workflow 运行记录或仓库内容。清理后的第一次编译会重新下载源码包并重建工具链缓存，因此耗时会更长；后续编译会重新积累 cache。
-
-### 自动编译
-
-`Auto-Build` 每 10 天检查一次 `VIKINGYFY/immortalwrt:main` 近期更新。检测到上游更新后，会先清理旧 Release 和 workflow 运行记录，再触发 `京东云雅典娜固件` 正式编译。
-
-### 目录结构
-
-```text
-.
-|-- Config/
-|   |-- JDC-AX6600.txt
-|   `-- GENERAL.txt
-|-- Scripts/
-|   |-- Handles.sh
-|   |-- Packages.sh
-|   |-- Settings.sh
-|   `-- find_button.sh
-`-- .github/workflows/
-    |-- Auto-Build.yml
-    |-- Clear-Cache.yml
-    |-- JDC-AX6600.yml
-    `-- WRT-CORE.yml
-```
-
-### 参考来源
-
-- `yjy116/Immortalwrt-CI-GL-AXT1800`：插件基线、工作流风格、通用脚本。
-- `VIKINGYFY/OpenWRT-CI`：IPQ60XX/QCA 通用配置、NSS 相关处理、包管理脚本。
-- `ones20250/Openwrt-AX6600`：AX6600 单设备 profile、eMMC/LED/无线/内存调优设置。
-- `iamdjofoburs/Openwrt-AX6600`：AX6600 标准 6MiB Kernel 限制下的轻量配置对照。
-- `davidtall/OpenWRT-CI`：daed/eBPF 大分区路线对照，用于评估后未作为默认方案采用。
-- `unraveloop/JDC-AX6600-Athena-LED-Controller`：雅典娜 LED 屏 LuCI 插件。
+- [davidtall/DaeWRT-CI](https://github.com/davidtall/DaeWRT-CI)：当前模板基座。
+- [VIKINGYFY/OpenWRT-CI](https://github.com/VIKINGYFY/OpenWRT-CI)：高通 / IPQ60XX / NSS 编译路线参考。
+- [ones20250/Openwrt-AX6600](https://github.com/ones20250/Openwrt-AX6600)：京东云雅典娜设备特化参考。
+- [yjy116/Immortalwrt-CI-GL-AXT1800](https://github.com/yjy116/Immortalwrt-CI-GL-AXT1800)：既有插件需求来源。
 
 ## English
 
-### Purpose
+This repository builds ImmortalWrt firmware for JDCloud Athena / JDC AX6600 (`jdcloud_re-cs-02`) with GitHub Actions.
 
-This repository builds standard 6 MiB Kernel ImmortalWrt firmware for JDCloud Athena / JDC AX6600 through GitHub Actions. The package baseline follows `yjy116/Immortalwrt-CI-GL-AXT1800`, with AXT1800 fan-control pieces removed. Device-specific settings for eMMC, LED, NSS, wireless tuning, and partition tools are merged from the referenced AX6600 repositories.
+It uses [davidtall/DaeWRT-CI](https://github.com/davidtall/DaeWRT-CI) as the base template, keeps the template daed/dae/nikki/eBPF/NSS/SKB recycler/IPQ60XX-WIFI configuration, and adds the requested JDC AX6600 single-device, large-partition, and plugin selections.
 
-### Device
-
-- Device: JDCloud Athena / JDC AX6600
-- OpenWrt profile: `jdcloud_re-cs-02`
-- Target: `qualcommax/ipq60xx`
-- Firmware type: standard 6 MiB Kernel build with the upstream default `KERNEL_SIZE=6144k`
-- Default address: `192.168.101.1`
-- Default Wi-Fi SSID: `Athena`
-- Default Wi-Fi password: `77915558`
-- Default theme: `aurora`
-
-### Highlights
-
-- Keeps the main plugin set from the AXT1800 repository while removing `luci-app-fancontrol`.
-- Adds qBittorrent through `luci-app-qbittorrent` from `sbwml/luci-app-qbittorrent`.
-- Adds Athena LED screen support through `luci-app-athena-led` and a build-time `find_button` helper.
-- Adds eMMC, partition expansion, and automount packages such as `block-mount`, `kmod-mmc`, `kmod-sdhci-msm`, `resize2fs`, and `tune2fs`.
-- Adds plugin and package selections enabled by `ones20250/Openwrt-AX6600` but missing here, including Sentinel, ARP bind, firewall4, NSS driver packages, `athena-led-control`, `iptasn`, `iperf3`, OpenSSL, and USB QMI modules.
-- Keeps Qualcomm platform handling for NSS feed control, NSS firmware version, NSS init order, and `ARM64_BRBE` disablement.
-- Trims daed/eBPF/BTF debug-heavy kernel features and enables kernel size optimization for the default 6 MiB `uImage.itb` limit.
-- Keeps HomeProxy, OpenClash, sing-box-tiny, Tailscale, EasyTier, ZeroTier, Samba, AdGuardHome, SQM, and TTYD.
-
-### Kernel Size
-
-The upstream `jdcloud_re-cs-02` image definition uses `KERNEL_SIZE=6144k`. `daed` requires eBPF/BTF/XDP/KPROBE-related kernel features, which can push `uImage.itb` beyond 6 MiB. This repository disables the daed main package and its BPF/BTF kernel stack by default to prioritize standard `.bin` image generation.
-
-### Build
-
-Run the `京东云雅典娜固件` workflow manually from GitHub Actions. Use `PACKAGE` to append temporary `.config` lines, and set `TEST` to `true` when you only want to generate the final config without compiling firmware.
-
-The generated firmware and final config are uploaded to GitHub Releases.
-
-### Cache Cleanup
-
-Cache cleanup is not needed regularly. GitHub can evict stale cache entries automatically, and keeping cache normally makes builds faster.
-
-Run the `一键清理缓存` workflow only when cache restore/save fails, disk space becomes tight, upstream source/toolchain changes are large, or repeated failures look like cache pollution. It deletes all GitHub Actions cache entries in this repository, but it does not delete Releases, firmware files, source files, workflow run history, or repository content. The first build after cleanup will be slower because caches need to be rebuilt.
+The build changes `KERNEL_SIZE` from `6144k` to `12288k`, so the generated `.bin` image is intended only for devices that have already been flashed with the large-partition patch.

@@ -1,87 +1,109 @@
 #!/bin/bash
-# SPDX-License-Identifier: MIT
 
-set -euo pipefail
+PKG_PATH="$GITHUB_WORKSPACE/$WRT_DIR/package/"
 
-PKG_PATH="$GITHUB_WORKSPACE/wrt/package/"
-
+#预置HomeProxy数据
 if [ -d *"homeproxy"* ]; then
-	hp_rule="surge"
-	hp_path="homeproxy/root/etc/homeproxy"
-	rm -rf "./$hp_path/resources/"*
-	git clone -q --depth=1 --single-branch --branch "release" "https://github.com/Loyalsoldier/surge-rules.git" "./$hp_rule/"
-	cd "./$hp_rule/"
-	res_ver=$(git log -1 --pretty=format:'%s' | grep -o "[0-9]*")
-	echo "$res_ver" | tee china_ip4.ver china_ip6.ver china_list.ver gfw_list.ver
+	echo " "
+
+	HP_RULE="surge"
+	HP_PATH="homeproxy/root/etc/homeproxy"
+
+	rm -rf ./$HP_PATH/resources/*
+
+	git clone -q --depth=1 --single-branch --branch "release" "https://github.com/Loyalsoldier/surge-rules.git" ./$HP_RULE/
+	cd ./$HP_RULE/ && RES_VER=$(git log -1 --pretty=format:'%s' | grep -o "[0-9]*")
+
+	echo $RES_VER | tee china_ip4.ver china_ip6.ver china_list.ver gfw_list.ver
 	awk -F, '/^IP-CIDR,/{print $2 > "china_ip4.txt"} /^IP-CIDR6,/{print $2 > "china_ip6.txt"}' cncidr.txt
-	sed 's/^\.//g' direct.txt > china_list.txt
-	sed 's/^\.//g' gfw.txt > gfw_list.txt
-	mv -f ./{china_*,gfw_list}.{ver,txt} "../$hp_path/resources/"
-	cd ..
-	rm -rf "./$hp_rule/"
-	cd "$PKG_PATH"
+	sed 's/^\.//g' direct.txt > china_list.txt ; sed 's/^\.//g' gfw.txt > gfw_list.txt
+	mv -f ./{china_*,gfw_list}.{ver,txt} ../$HP_PATH/resources/
+
+	cd .. && rm -rf ./$HP_RULE/
+
+	cd $PKG_PATH && echo "homeproxy date has been updated!"
 fi
 
-homeproxy_makefile="../feeds/luci/applications/luci-app-homeproxy/Makefile"
-if [ -f "$homeproxy_makefile" ]; then
-	sed -i 's#+sing-box[[:space:]]*\\#+sing-box-tiny \\#g' "$homeproxy_makefile"
-fi
-
+#修改argon主题字体和颜色
 if [ -d *"luci-theme-argon"* ]; then
+	echo " "
+
 	cd ./luci-theme-argon/
+
 	sed -i "s/primary '.*'/primary '#31a1a1'/; s/'0.2'/'0.5'/; s/'none'/'bing'/; s/'600'/'normal'/" ./luci-app-argon-config/root/etc/config/argon
-	cd "$PKG_PATH"
+
+	cd $PKG_PATH && echo "theme-argon has been fixed!"
 fi
 
+#修改aurora菜单式样
 if [ -d *"luci-app-aurora-config"* ]; then
+	echo " "
+
 	cd ./luci-app-aurora-config/
-	find ./root/usr/share/aurora/ -type f -name "*.template" -exec sed -i "s/nav_submenu_type '.*'/nav_submenu_type 'boxed-dropdown'/g" {} +
-	cd "$PKG_PATH"
+
+	sed -i "s/nav_submenu_type '.*'/nav_submenu_type 'boxed-dropdown'/g" $(find ./root/ -type f -name "*aurora")
+
+	cd $PKG_PATH && echo "theme-aurora has been fixed!"
 fi
 
-if [ -d *"luci-app-mini-diskmanager"* ]; then
-	menu="./luci-app-mini-diskmanager/root/usr/share/luci/menu.d/luci-app-mini-diskmanager.json"
-	sed -i "s/services/system/g" "$menu"
+#修改qca-nss-drv启动顺序
+NSS_DRV="../feeds/nss_packages/qca-nss-drv/files/qca-nss-drv.init"
+if [ -f "$NSS_DRV" ]; then
+	echo " "
+
+	sed -i 's/START=.*/START=85/g' $NSS_DRV
+
+	cd $PKG_PATH && echo "qca-nss-drv has been fixed!"
 fi
 
-if [ -d "./JDC-AX6600-Athena-LED-Controller/luci-app-athena-led" ]; then
-	rm -rf ./luci-app-athena-led
-	mv ./JDC-AX6600-Athena-LED-Controller/luci-app-athena-led ./luci-app-athena-led
-	rm -rf ./JDC-AX6600-Athena-LED-Controller
+#修改qca-nss-pbuf启动顺序
+NSS_PBUF="./kernel/mac80211/files/qca-nss-pbuf.init"
+if [ -f "$NSS_PBUF" ]; then
+	echo " "
+
+	sed -i 's/START=.*/START=86/g' $NSS_PBUF
+
+	cd $PKG_PATH && echo "qca-nss-pbuf has been fixed!"
 fi
 
-if [ -d "./luci-app-athena-led" ]; then
-	mkdir -p ./luci-app-athena-led/root/usr/bin
-	if [ ! -f ./luci-app-athena-led/root/usr/bin/find_button.sh ]; then
-		cp "$GITHUB_WORKSPACE/Scripts/find_button.sh" ./luci-app-athena-led/root/usr/bin/find_button.sh
-	fi
+#修复TailScale配置文件冲突
+TS_FILE=$(find ../feeds/packages/ -maxdepth 3 -type f -wholename "*/tailscale/Makefile")
+if [ -f "$TS_FILE" ]; then
+	echo " "
+
+	sed -i '/\/files/d' $TS_FILE
+
+	cd $PKG_PATH && echo "tailscale has been fixed!"
 fi
 
-if [ -d "./OpenWrt-nikki/mihomo-alpha" ] && [ -d "./OpenWrt-nikki/mihomo-meta" ]; then
-	echo "Removing OpenWrt-nikki/mihomo-alpha to avoid Kconfig recursion with mihomo-meta."
-	rm -rf ./OpenWrt-nikki/mihomo-alpha
+#修复Rust编译失败
+RUST_FILE=$(find ../feeds/packages/ -maxdepth 3 -type f -wholename "*/rust/Makefile")
+if [ -f "$RUST_FILE" ]; then
+	echo " "
+
+	sed -i 's/ci-llvm=true/ci-llvm=false/g' $RUST_FILE
+
+	cd $PKG_PATH && echo "rust has been fixed!"
 fi
 
-if [ -f "./luci-app-iperf3/Makefile" ]; then
-	sed -i 's#include ../../luci.mk#include $(TOPDIR)/feeds/luci/luci.mk#g' ./luci-app-iperf3/Makefile
+#修复DiskMan编译失败
+DM_FILE="./luci-app-diskman/applications/luci-app-diskman/Makefile"
+if [ -f "$DM_FILE" ]; then
+	echo " "
+
+	sed -i '/ntfs-3g-utils /d' $DM_FILE
+
+	cd $PKG_PATH && echo "diskman has been fixed!"
 fi
 
-nss_drv="../feeds/nss_packages/qca-nss-drv/files/qca-nss-drv.init"
-if [ -f "$nss_drv" ]; then
-	sed -i 's/START=.*/START=85/g' "$nss_drv"
-fi
+#修复luci-app-netspeedtest相关问题
+if [ -d *"luci-app-netspeedtest"* ]; then
+	echo " "
 
-nss_pbuf="./kernel/mac80211/files/qca-nss-pbuf.init"
-if [ -f "$nss_pbuf" ]; then
-	sed -i 's/START=.*/START=86/g' "$nss_pbuf"
-fi
+	cd ./luci-app-netspeedtest/
 
-ts_file=$(find ../feeds/packages/ -maxdepth 3 -type f -wholename "*/tailscale/Makefile" -print -quit)
-if [ -n "$ts_file" ]; then
-	sed -i '/\/files/d' "$ts_file"
-fi
+	sed -i '$a\exit 0' ./netspeedtest/files/99_netspeedtest.defaults
+	sed -i 's/ca-certificates/ca-bundle/g' ./speedtest-cli/Makefile
 
-rust_file=$(find ../feeds/packages/ -maxdepth 3 -type f -wholename "*/rust/Makefile" -print -quit)
-if [ -n "$rust_file" ]; then
-	sed -i 's/ci-llvm=true/ci-llvm=false/g' "$rust_file"
+	cd $PKG_PATH && echo "netspeedtest has been fixed!"
 fi

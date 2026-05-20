@@ -1,103 +1,145 @@
 #!/bin/bash
-# SPDX-License-Identifier: MIT
 
-set -euo pipefail
+#安装和更新软件包
+UPDATE_PACKAGE() {
+	local PKG_NAME=$1
+	local PKG_REPO=$2
+	local PKG_BRANCH=$3
+	local PKG_SPECIAL=$4
+	local PKG_LIST=("$PKG_NAME" $5)  # 第5个参数为自定义名称列表
+	local REPO_NAME=${PKG_REPO#*/}
 
-update_package() {
-	local pkg_name=$1
-	local pkg_repo=$2
-	local pkg_branch=$3
-	local pkg_special=${4:-}
-	local pkg_aliases=${5:-}
-	local repo_name=${pkg_repo#*/}
+	echo " "
 
-	echo "Updating package: $pkg_name"
-	for name in $pkg_name $pkg_aliases; do
-		find ../feeds/luci/ ../feeds/packages/ -maxdepth 3 -type d -iname "*$name*" 2>/dev/null | while read -r dir; do
-			rm -rf "$dir"
-			echo "Deleted package directory: $dir"
-		done
+	# 删除本地可能存在的不同名称的软件包
+	for NAME in "${PKG_LIST[@]}"; do
+		# 查找匹配的目录
+		echo "Search directory: $NAME"
+		local FOUND_DIRS=$(find ../feeds/luci/ ../feeds/packages/ -maxdepth 3 -type d -iname "*$NAME*" 2>/dev/null)
+
+		# 删除找到的目录
+		if [ -n "$FOUND_DIRS" ]; then
+			while read -r DIR; do
+				rm -rf "$DIR"
+				echo "Delete directory: $DIR"
+			done <<< "$FOUND_DIRS"
+		else
+			echo "Not fonud directory: $NAME"
+		fi
 	done
 
-	git clone --depth=1 --single-branch --branch "$pkg_branch" "https://github.com/$pkg_repo.git"
+	# 克隆 GitHub 仓库
+	git clone --depth=1 --single-branch --branch $PKG_BRANCH "https://github.com/$PKG_REPO.git"
 
-	if [[ "$pkg_special" == "pkg" ]]; then
-		local tmp_dir
-		local pkg_dir
-		tmp_dir=$(mktemp -d)
-		pkg_dir=$(find "./$repo_name" -mindepth 2 -maxdepth 4 -type f -name Makefile -path "*$pkg_name*" -printf '%h\n' | head -n 1)
-		[ -n "$pkg_dir" ] || { echo "Package directory not found: $pkg_name in $repo_name" >&2; exit 1; }
-		cp -rf "$pkg_dir" "$tmp_dir/"
-		rm -rf "./$repo_name/"
-		cp -rf "$tmp_dir/$(basename "$pkg_dir")" ./
-		rm -rf "$tmp_dir"
-		return
-	fi
-
-	if [[ "$pkg_special" == "name" ]]; then
-		mv -f "$repo_name" "$pkg_name"
+	# 处理克隆的仓库
+	if [[ "$PKG_SPECIAL" == "pkg" ]]; then
+		find ./$REPO_NAME/*/ -maxdepth 3 -type d -iname "*$PKG_NAME*" -prune -exec cp -rf {} ./ \;
+		rm -rf ./$REPO_NAME/
+	elif [[ "$PKG_SPECIAL" == "name" ]]; then
+		mv -f $REPO_NAME $PKG_NAME
 	fi
 }
 
-update_version() {
-	local pkg_name=$1
-	local pkg_mark=${2:-false}
-	local pkg_files
+# 调用示例
+# UPDATE_PACKAGE "OpenAppFilter" "destan19/OpenAppFilter" "master" "" "custom_name1 custom_name2"
+# UPDATE_PACKAGE "open-app-filter" "destan19/OpenAppFilter" "master" "" "luci-app-appfilter oaf" 这样会把原有的open-app-filter，luci-app-appfilter，oaf相关组件删除，不会出现coremark错误。
 
-	pkg_files=$(find ./ ../feeds/packages/ -maxdepth 3 -type f -wholename "*/$pkg_name/Makefile")
-	[ -n "$pkg_files" ] || { echo "$pkg_name not found."; return; }
+# UPDATE_PACKAGE "包名" "项目地址" "项目分支" "pkg/name，可选，pkg为从大杂烩中单独提取包名插件；name为重命名为包名"
+UPDATE_PACKAGE "argon" "sbwml/luci-theme-argon" "openwrt-25.12"
+UPDATE_PACKAGE "aurora" "eamonxg/luci-theme-aurora" "master"
+UPDATE_PACKAGE "aurora-config" "eamonxg/luci-app-aurora-config" "master"
+UPDATE_PACKAGE "kucat" "sirpdboy/luci-theme-kucat" "master"
+UPDATE_PACKAGE "kucat-config" "sirpdboy/luci-app-kucat-config" "master"
 
-	for pkg_file in $pkg_files; do
-		local pkg_repo pkg_tag old_ver old_url old_file old_hash pkg_url new_ver new_url new_hash
-		pkg_repo=$(grep -Po "PKG_SOURCE_URL:=https://.*github.com/\K[^/]+/[^/]+(?=.*)" "$pkg_file")
-		pkg_tag=$(curl -fsSL "https://api.github.com/repos/$pkg_repo/releases" | jq -r "map(select(.prerelease == $pkg_mark)) | first | .tag_name")
-		old_ver=$(grep -Po "PKG_VERSION:=\K.*" "$pkg_file")
-		old_url=$(grep -Po "PKG_SOURCE_URL:=\K.*" "$pkg_file")
-		old_file=$(grep -Po "PKG_SOURCE:=\K.*" "$pkg_file")
-		old_hash=$(grep -Po "PKG_HASH:=\K.*" "$pkg_file")
-		pkg_url=$([[ "$old_url" == *"releases"* ]] && echo "${old_url%/}/$old_file" || echo "${old_url%/}")
-		new_ver=$(echo "$pkg_tag" | sed -E 's/[^0-9]+/\./g; s/^\.|\.$//g')
-		new_url=$(echo "$pkg_url" | sed "s/\$(PKG_VERSION)/$new_ver/g; s/\$(PKG_NAME)/$pkg_name/g")
-		new_hash=$(curl -fsSL "$new_url" | sha256sum | cut -d ' ' -f 1)
+UPDATE_PACKAGE "homeproxy" "VIKINGYFY/homeproxy" "main"
+UPDATE_PACKAGE "momo" "nikkinikki-org/OpenWrt-momo" "main"
+UPDATE_PACKAGE "nikki" "nikkinikki-org/OpenWrt-nikki" "main"
+UPDATE_PACKAGE "openclash" "vernesong/OpenClash" "dev" "pkg"
+#UPDATE_PACKAGE "passwall" "Openwrt-Passwall/openwrt-passwall" "main" "pkg"
+#UPDATE_PACKAGE "passwall2" "Openwrt-Passwall/openwrt-passwall2" "main" "pkg"
 
-		echo "$pkg_name old: $old_ver $old_hash"
-		echo "$pkg_name new: $new_ver $new_hash"
-		if [[ "$new_ver" =~ ^[0-9].* ]] && dpkg --compare-versions "$old_ver" lt "$new_ver"; then
-			sed -i "s/PKG_VERSION:=.*/PKG_VERSION:=$new_ver/g" "$pkg_file"
-			sed -i "s/PKG_HASH:=.*/PKG_HASH:=$new_hash/g" "$pkg_file"
+UPDATE_PACKAGE "luci-app-tailscale" "asvow/luci-app-tailscale" "main"
+
+#UPDATE_PACKAGE "athena-led" "unraveloop/JDC-AX6600-Athena-LED-Controller" "main"
+UPDATE_PACKAGE "ddns-go" "sirpdboy/luci-app-ddns-go" "main"
+UPDATE_PACKAGE "diskman" "lisaac/luci-app-diskman" "master"
+UPDATE_PACKAGE "luci-app-mini-diskmanager" "4IceG/luci-app-mini-diskmanager" "main" "pkg"
+UPDATE_PACKAGE "easytier" "EasyTier/luci-app-easytier" "main"
+UPDATE_PACKAGE "fancontrol" "rockjake/luci-app-fancontrol" "main"
+UPDATE_PACKAGE "gecoosac" "openwrt-fork/openwrt-gecoosac" "main"
+UPDATE_PACKAGE "mosdns" "sbwml/luci-app-mosdns" "v5" "" "v2dat"
+#UPDATE_PACKAGE "netspeedtest" "sirpdboy/luci-app-netspeedtest" "master" "" "homebox speedtest"
+UPDATE_PACKAGE "openlist2" "sbwml/luci-app-openlist2" "main"
+UPDATE_PACKAGE "partexp" "sirpdboy/luci-app-partexp" "main"
+UPDATE_PACKAGE "qbittorrent" "sbwml/luci-app-qbittorrent" "master" "" "qt6base qt6tools rblibtorrent"
+UPDATE_PACKAGE "qmodem" "FUjr/QModem" "main"
+UPDATE_PACKAGE "quickfile" "sbwml/luci-app-quickfile" "main"
+UPDATE_PACKAGE "viking" "VIKINGYFY/packages" "main" "" "luci-app-timewol luci-app-wolplus"
+UPDATE_PACKAGE "vnt" "lmq8267/luci-app-vnt" "main"
+
+
+UPDATE_PACKAGE "luci-app-daed" "QiuSimons/luci-app-daed" "kix"
+UPDATE_PACKAGE "luci-app-pushbot" "zzsj0928/luci-app-pushbot" "master"
+UPDATE_PACKAGE "luci-app-lucky" "sirpdboy/luci-app-lucky" "main"
+#更新软件包版本
+UPDATE_VERSION() {
+	local PKG_NAME=$1
+	local PKG_MARK=${2:-false}
+	local PKG_FILES=$(find ./ ../feeds/packages/ -maxdepth 3 -type f -wholename "*/$PKG_NAME/Makefile")
+
+	if [ -z "$PKG_FILES" ]; then
+		echo "$PKG_NAME not found!"
+		return
+	fi
+
+	echo -e "\n$PKG_NAME version update has started!"
+
+	for PKG_FILE in $PKG_FILES; do
+		local PKG_REPO=$(grep -Po "PKG_SOURCE_URL:=https://.*github.com/\K[^/]+/[^/]+(?=.*)" $PKG_FILE)
+		local PKG_TAG=$(curl -sL "https://api.github.com/repos/$PKG_REPO/releases" | jq -r "map(select(.prerelease == $PKG_MARK)) | first | .tag_name")
+
+		local OLD_VER=$(grep -Po "PKG_VERSION:=\K.*" "$PKG_FILE")
+		local OLD_URL=$(grep -Po "PKG_SOURCE_URL:=\K.*" "$PKG_FILE")
+		local OLD_FILE=$(grep -Po "PKG_SOURCE:=\K.*" "$PKG_FILE")
+		local OLD_HASH=$(grep -Po "PKG_HASH:=\K.*" "$PKG_FILE")
+
+		local PKG_URL=$([[ "$OLD_URL" == *"releases"* ]] && echo "${OLD_URL%/}/$OLD_FILE" || echo "${OLD_URL%/}")
+
+		local NEW_VER=$(echo $PKG_TAG | sed -E 's/[^0-9]+/\./g; s/^\.|\.$//g')
+		local NEW_URL=$(echo $PKG_URL | sed "s/\$(PKG_VERSION)/$NEW_VER/g; s/\$(PKG_NAME)/$PKG_NAME/g")
+		local NEW_HASH=$(curl -sL "$NEW_URL" | sha256sum | cut -d ' ' -f 1)
+
+		echo "old version: $OLD_VER $OLD_HASH"
+		echo "new version: $NEW_VER $NEW_HASH"
+
+		if [[ "$NEW_VER" =~ ^[0-9].* ]] && dpkg --compare-versions "$OLD_VER" lt "$NEW_VER"; then
+			sed -i "s/PKG_VERSION:=.*/PKG_VERSION:=$NEW_VER/g" "$PKG_FILE"
+			sed -i "s/PKG_HASH:=.*/PKG_HASH:=$NEW_HASH/g" "$PKG_FILE"
+			echo "$PKG_FILE version has been updated!"
+		else
+			echo "$PKG_FILE version is already the latest!"
 		fi
 	done
 }
 
-update_package "argon" "sbwml/luci-theme-argon" "openwrt-25.12"
-update_package "aurora" "eamonxg/luci-theme-aurora" "master"
-update_package "aurora-config" "eamonxg/luci-app-aurora-config" "master"
-update_package "kucat" "sirpdboy/luci-theme-kucat" "master"
-update_package "kucat-config" "sirpdboy/luci-app-kucat-config" "master"
+#UPDATE_VERSION "软件包名" "测试版，true，可选，默认为否"
+#UPDATE_VERSION "sing-box"
+#UPDATE_VERSION "tailscale"
 
-update_package "athena-led" "unraveloop/JDC-AX6600-Athena-LED-Controller" "main"
-update_package "momo" "nikkinikki-org/OpenWrt-momo" "main"
-update_package "nikki" "nikkinikki-org/OpenWrt-nikki" "main"
-update_package "openclash" "vernesong/OpenClash" "dev" "pkg"
-update_package "passwall" "Openwrt-Passwall/openwrt-passwall" "main" "pkg"
-update_package "passwall2" "Openwrt-Passwall/openwrt-passwall2" "main" "pkg"
-update_package "luci-app-tailscale" "asvow/luci-app-tailscale" "main"
 
-update_package "ddns-go" "sirpdboy/luci-app-ddns-go" "main"
-update_package "diskman" "sbwml/luci-app-diskman" "main"
-update_package "luci-app-mini-diskmanager" "4IceG/luci-app-mini-diskmanager" "main" "pkg"
-update_package "easytier" "EasyTier/luci-app-easytier" "main"
-update_package "luci-app-iperf3" "Gevatter-Tod/luci-app-iperf3" "main"
-update_package "netwizard" "sirpdboy/luci-app-netwizard" "main"
-update_package "openlist2" "sbwml/luci-app-openlist2" "main"
-update_package "partexp" "sirpdboy/luci-app-partexp" "main"
-update_package "qbittorrent" "sbwml/luci-app-qbittorrent" "master" "" "qt6base qt6tools rblibtorrent"
-update_package "qmodem" "FUjr/QModem" "main"
-update_package "quickfile" "sbwml/luci-app-quickfile" "main"
-update_package "timecontrol" "sirpdboy/luci-app-timecontrol" "main"
-update_package "viking" "VIKINGYFY/packages" "main" "" "luci-app-timewol luci-app-wolplus"
-update_package "vnt" "lmq8267/luci-app-vnt" "main"
 
-if [ -f "$GITHUB_WORKSPACE/Scripts/PRIVATE.sh" ]; then
-	source "$GITHUB_WORKSPACE/Scripts/PRIVATE.sh"
-fi
+#删除官方的默认插件
+rm -rf ../feeds/luci/applications/luci-app-{passwall*,mosdns,dockerman,dae*,bypass*}
+rm -rf ../feeds/packages/net/{v2ray-geodata,dae*}
+cp -r $GITHUB_WORKSPACE/package/* ./
+#修复daed/Makefile
+#rm -rf luci-app-daed/daed/Makefile && cp -r $GITHUB_WORKSPACE/patches/daed/Makefile luci-app-daed/daed/
+sed -i 's/pnpm install ; \\/pnpm install --no-frozen-lockfile ; \\/g' luci-app-daed/daed/Makefile
+sed -i 's|github.com/daeuniverse/quic-go|github.com/olicesx/quic-go|g' luci-app-daed/daed/Makefile
+
+sed -i 's|/run/i\\  procd_set_param|/procd_set_param command/i \\\tprocd_set_param|g' luci-app-daed/luci-app-daed/root/etc/init.d/luci_daed
+#cat luci-app-daed/daed/Makefile
+#修复libubox报错
+#sed -i '/include $(INCLUDE_DIR)\/cmake.mk/a PKG_BUILD_FLAGS:=no-werror' ../package/libs/libubox/Makefile
+#sed -i 's|TARGET_CFLAGS += -I$(STAGING_DIR)/usr/include|& -Wno-error=format-nonliteral -Wno-format-nonliteral|' ../package/libs/libubox/Makefile
+#cat ../package/libs/libubox/Makefile
