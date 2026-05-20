@@ -37,7 +37,6 @@ An ImmortalWrt GitHub Actions build project for JDCloud Athena / JDC AX6600 (`jd
 3. 点击 `Run workflow`。
 4. 如需临时增删配置，在 `PACKAGE` 输入框填入额外 `.config` 行，多行使用换行分隔。
 5. 如只想生成配置文件，将 `TEST` 设为 `true`。
-6. 如遇到缓存异常、磁盘空间不足或上游大版本更新后疑似旧缓存干扰，可将 `CLEAR_CACHE` 设为 `true`。该选项只会清理本固件对应的下载缓存和构建缓存，下一次编译会更干净，但也会更慢。
 
 编译完成后，固件和最终 `.config` 会发布到 GitHub Releases。
 
@@ -45,13 +44,20 @@ An ImmortalWrt GitHub Actions build project for JDCloud Athena / JDC AX6600 (`jd
 
 默认不需要定期清理 cache。GitHub 会自动淘汰长期未访问的缓存，仓库缓存也有容量限制；正常情况下保留缓存可以明显减少重复下载和工具链构建时间。
 
-建议仅在以下情况手动开启 `CLEAR_CACHE`：
+如果遇到以下情况，可以手动运行 `一键清理缓存` workflow，把本仓库的 GitHub Actions cache 全部清掉：
 
 - Actions 日志出现 cache restore/save 失败、缓存损坏或磁盘空间不足。
 - 上游源码、工具链或 target 发生较大变化，怀疑旧缓存导致异常。
 - 多次编译失败且错误位置不稳定，需要先排除脏缓存影响。
 
-`CLEAR_CACHE=true` 会在恢复缓存前调用 GitHub Actions cache API，仅删除当前配置与源码来源匹配的 `dl` 和 `build` cache。它不会删除 Releases、构建产物、其它仓库内容，也不会影响默认关闭状态下的正常加速。
+操作方式：
+
+1. 进入 GitHub Actions。
+2. 选择 `一键清理缓存` workflow。
+3. 点击 `Run workflow`。
+4. 清理完成后，再运行 `京东云雅典娜固件` workflow 重新编译。
+
+`一键清理缓存` 只删除 GitHub Actions cache，不会删除 Releases、固件产物、源码文件、workflow 运行记录或仓库内容。清理后的第一次编译会重新下载源码包并重建工具链缓存，因此耗时会更长；后续编译会重新积累 cache。
 
 ### 自动编译
 
@@ -71,6 +77,7 @@ An ImmortalWrt GitHub Actions build project for JDCloud Athena / JDC AX6600 (`jd
 |   `-- find_button.sh
 `-- .github/workflows/
     |-- Auto-Build.yml
+    |-- Clear-Cache.yml
     |-- JDC-AX6600.yml
     `-- WRT-CORE.yml
 ```
@@ -111,6 +118,10 @@ This repository builds ImmortalWrt firmware for JDCloud Athena / JDC AX6600 thro
 
 Run the `JDC-AX6600` workflow manually from GitHub Actions. Use `PACKAGE` to append temporary `.config` lines, and set `TEST` to `true` when you only want to generate the final config without compiling firmware.
 
-Set `CLEAR_CACHE` to `true` only when cache restore/save looks broken, disk space becomes tight, or a major upstream change may have made old caches unsafe. This deletes only the matching download and build caches for this firmware before cache restore; the next build is cleaner but slower.
-
 The generated firmware and final config are uploaded to GitHub Releases.
+
+### Cache Cleanup
+
+Cache cleanup is not needed regularly. GitHub can evict stale cache entries automatically, and keeping cache normally makes builds faster.
+
+Run the `一键清理缓存` workflow only when cache restore/save fails, disk space becomes tight, upstream source/toolchain changes are large, or repeated failures look like cache pollution. It deletes all GitHub Actions cache entries in this repository, but it does not delete Releases, firmware files, source files, workflow run history, or repository content. The first build after cleanup will be slower because caches need to be rebuilt.

@@ -1,0 +1,31 @@
+name: 一键清理缓存
+
+on:
+  workflow_dispatch:
+
+permissions:
+  actions: write
+  contents: read
+
+concurrency:
+  group: clear-actions-cache
+  cancel-in-progress: false
+
+jobs:
+  clear:
+    name: 清理全部 GitHub Actions cache
+    runs-on: ubuntu-latest
+    steps:
+      - name: 一键清理全部 cache
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          echo "Caches before cleanup:"
+          gh cache list --limit 100 --repo "$GITHUB_REPOSITORY" || true
+
+          gh cache delete --all --succeed-on-no-caches --repo "$GITHUB_REPOSITORY"
+
+          echo "Caches after cleanup:"
+          gh cache list --limit 100 --repo "$GITHUB_REPOSITORY" || true
