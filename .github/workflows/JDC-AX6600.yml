@@ -1,4 +1,4 @@
-name: 京东云雅典娜固件
+name: 京东云雅典娜2G大分区固件
 
 on:
   workflow_dispatch:
@@ -17,7 +17,7 @@ permissions: write-all
 
 jobs:
   config:
-    name: 京东云雅典娜
+    name: 京东云雅典娜2G大分区
     strategy:
       fail-fast: false
       matrix:
