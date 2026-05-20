@@ -1,4 +1,4 @@
-name: WRT-CORE
+name: 固件编译核心
 
 on:
   workflow_call:
@@ -57,13 +57,17 @@ env:
 
 jobs:
   core:
-    name: ${{ inputs.WRT_SOURCE }}
+    name: 编译 ${{ inputs.WRT_SOURCE }}
     runs-on: ubuntu-latest
+    timeout-minutes: 360
+    concurrency:
+      group: firmware-${{ inputs.WRT_CONFIG }}-${{ inputs.WRT_SOURCE }}-${{ inputs.WRT_BRANCH }}
+      cancel-in-progress: true
     steps:
-      - name: Checkout project
+      - name: 检出项目
         uses: actions/checkout@v5
 
-      - name: Free runner disk space
+      - name: 释放构建空间
         run: |
           set -euxo pipefail
 
@@ -81,7 +85,7 @@ jobs:
           sudo -E apt-get clean
           df -h
 
-      - name: Initialize build environment
+      - name: 初始化编译环境
         env:
           DEBIAN_FRONTEND: noninteractive
         run: |
@@ -102,7 +106,7 @@ jobs:
           sudo chown "$USER:$USER" /mnt/build_wrt
           ln -s /mnt/build_wrt "$GITHUB_WORKSPACE/wrt"
 
-      - name: Initialize values
+      - name: 初始化变量
         run: |
           set -euo pipefail
 
@@ -120,7 +124,7 @@ jobs:
             echo "WRT_LIST=none"
           } >> "$GITHUB_ENV"
 
-      - name: Clone source
+      - name: 克隆源码
         run: |
           set -euxo pipefail
 
@@ -133,13 +137,13 @@ jobs:
             sed -i '/.cn\//d; /tencent/d; /aliyun/d' "$project_mirrors_file"
           fi
 
-      - name: Normalize scripts
+      - name: 规范化脚本
         run: |
           set -euxo pipefail
 
           find ./ -maxdepth 3 -type f -iregex ".*\(txt\|sh\)$" -exec dos2unix {} \; -exec chmod +x {} \;
 
-      - name: Restore download cache
+      - name: 恢复下载缓存
         id: restore-dl-cache
         if: env.WRT_TEST != 'true'
         uses: actions/cache/restore@v5
@@ -148,10 +152,10 @@ jobs:
           restore-keys: ${{ env.WRT_CONFIG }}-${{ env.WRT_INFO }}-dl-
           path: ./wrt/dl
 
-      - name: Restore build cache
-        id: restore-build-cache
+      - name: 恢复构建缓存
+        id: build-cache
         if: env.WRT_TEST != 'true'
-        uses: actions/cache/restore@v5
+        uses: actions/cache@v5
         with:
           key: ${{ env.WRT_CONFIG }}-${{ env.WRT_INFO }}-build-${{ env.WRT_HASH }}
           restore-keys: |
@@ -162,7 +166,7 @@ jobs:
             ./wrt/staging_dir/host*
             ./wrt/staging_dir/tool*
 
-      - name: Refresh restored cache stamps
+      - name: 刷新缓存时间戳
         if: env.WRT_TEST != 'true'
         run: |
           set -euxo pipefail
@@ -175,7 +179,7 @@ jobs:
             echo "1" > ./wrt/tmp/.build
           fi
 
-      - name: Update feeds
+      - name: 更新 feeds
         run: |
           set -euxo pipefail
 
@@ -183,7 +187,7 @@ jobs:
           ./scripts/feeds update -a
           ./scripts/feeds install -a
 
-      - name: Custom packages
+      - name: 自定义插件
         run: |
           set -euxo pipefail
 
@@ -191,7 +195,7 @@ jobs:
           "$GITHUB_WORKSPACE/Scripts/Packages.sh"
           "$GITHUB_WORKSPACE/Scripts/Handles.sh"
 
-      - name: Custom settings
+      - name: 生成编译配置
         run: |
           set -euxo pipefail
 
@@ -200,27 +204,7 @@ jobs:
           "$GITHUB_WORKSPACE/Scripts/Settings.sh"
           make defconfig -j"$(nproc)"
 
-      - name: Warm build cache
-        if: env.WRT_TEST != 'true' && steps.restore-build-cache.outputs.cache-hit != 'true'
-        run: |
-          set -euxo pipefail
-
-          cd ./wrt/
-          make tools/install -j"$(nproc)"
-          make toolchain/install -j"$(nproc)"
-          make target/linux/compile -j"$(nproc)"
-
-      - name: Save build cache
-        if: env.WRT_TEST != 'true' && steps.restore-build-cache.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v5
-        with:
-          key: ${{ env.WRT_CONFIG }}-${{ env.WRT_INFO }}-build-${{ env.WRT_HASH }}
-          path: |
-            ./wrt/.ccache
-            ./wrt/staging_dir/host*
-            ./wrt/staging_dir/tool*
-
-      - name: Download packages
+      - name: 下载源码包
         if: env.WRT_TEST != 'true'
         run: |
           set -euxo pipefail
@@ -228,14 +212,14 @@ jobs:
           cd ./wrt/
           make download -j"$(nproc)"
 
-      - name: Save download cache
+      - name: 保存下载缓存
         if: env.WRT_TEST != 'true' && steps.restore-dl-cache.outputs.cache-hit != 'true'
         uses: actions/cache/save@v5
         with:
           key: ${{ env.WRT_CONFIG }}-${{ env.WRT_INFO }}-dl-${{ github.sha }}
           path: ./wrt/dl
 
-      - name: Compile firmware
+      - name: 编译固件
         if: env.WRT_TEST != 'true'
         run: |
           set -euxo pipefail
@@ -244,7 +228,7 @@ jobs:
           find package/ -name Makefile -path "*/ubus/*" -exec sed -i 's/-Werror/-Wno-error=format-nonliteral/g' {} +
           make -j"$(nproc)" || make -j1 V=s
 
-      - name: Machine information
+      - name: 输出机器信息
         run: |
           set -euxo pipefail
 
@@ -253,7 +237,7 @@ jobs:
           df -h
           du -h --max-depth=1
 
-      - name: Package firmware
+      - name: 打包固件
         run: |
           set -euxo pipefail
 
@@ -276,7 +260,7 @@ jobs:
             make clean -j"$(nproc)"
           fi
 
-      - name: Release firmware
+      - name: 发布固件
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ env.WRT_CONFIG }}-${{ env.WRT_INFO }}-${{ env.WRT_BRANCH }}-${{ env.WRT_DATE }}

@@ -1,4 +1,4 @@
-name: JDC-AX6600
+name: 京东云雅典娜固件
 
 on:
   workflow_dispatch:
@@ -17,7 +17,7 @@ permissions: write-all
 
 jobs:
   config:
-    name: ${{ matrix.CONFIG }}
+    name: 京东云雅典娜
     strategy:
       fail-fast: false
       matrix:

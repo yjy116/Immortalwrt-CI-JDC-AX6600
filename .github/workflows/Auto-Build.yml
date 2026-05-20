@@ -1,4 +1,4 @@
-name: Auto-Build
+name: 自动检查编译
 
 on:
   schedule:
@@ -7,13 +7,18 @@ on:
 
 permissions: write-all
 
+concurrency:
+  group: 自动检查编译
+  cancel-in-progress: true
+
 jobs:
   check_updates:
+    name: 检查上游更新
     runs-on: ubuntu-latest
     outputs:
       should_build: ${{ steps.check.outputs.should_build }}
     steps:
-      - name: Check upstream updates
+      - name: 检查上游更新
         id: check
         env:
           SOURCE: VIKINGYFY/immortalwrt
@@ -39,11 +44,12 @@ jobs:
           echo "should_build=false" >> "$GITHUB_OUTPUT"
 
   clean:
+    name: 清理旧版本
     needs: check_updates
     if: needs.check_updates.outputs.should_build == 'true'
     runs-on: ubuntu-latest
     steps:
-      - name: Delete old releases and workflow runs
+      - name: 清理旧发布和运行记录
         uses: ophub/delete-releases-workflows@main
         with:
           gh_token: ${{ secrets.GITHUB_TOKEN }}
@@ -54,11 +60,12 @@ jobs:
           workflows_keep_day: 0
 
   trigger_build:
+    name: 触发固件编译
     needs: [check_updates, clean]
     if: needs.check_updates.outputs.should_build == 'true' && needs.clean.result == 'success'
     runs-on: ubuntu-latest
     steps:
-      - name: Dispatch JDC-AX6600 workflow
+      - name: 触发京东云雅典娜编译
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
