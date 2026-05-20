@@ -8,14 +8,14 @@ An ImmortalWrt GitHub Actions build project for JDCloud Athena / JDC AX6600 (`jd
 
 ### 项目定位
 
-本仓库用于通过 GitHub Actions 编译京东云雅典娜 / JDC AX6600 2G 大分区固件。插件配置以 `yjy116/Immortalwrt-CI-GL-AXT1800` 为主，已移除 AXT1800 专用风扇控件，并结合 `VIKINGYFY/OpenWRT-CI`、`ones20250/Openwrt-AX6600`、`iamdjofoburs/Openwrt-AX6600` 与 `davidtall/OpenWRT-CI` 中针对 AX6600 的 eMMC、LED、NSS、无线、分区工具和大分区 Kernel 设置。
+本仓库用于通过 GitHub Actions 编译京东云雅典娜 / JDC AX6600 标准 6MiB Kernel 固件。插件配置以 `yjy116/Immortalwrt-CI-GL-AXT1800` 为主，已移除 AXT1800 专用风扇控件，并结合 `VIKINGYFY/OpenWRT-CI`、`ones20250/Openwrt-AX6600` 与 `iamdjofoburs/Openwrt-AX6600` 中针对 AX6600 的 eMMC、LED、NSS、无线和分区工具设置。
 
 ### 设备配置
 
 - 设备：京东云雅典娜 / JDC AX6600
 - OpenWrt profile：`jdcloud_re-cs-02`
 - Target：`qualcommax/ipq60xx`
-- 固件类型：2G 大分区固件，构建时将 `jdcloud_re-cs-02` 的 `KERNEL_SIZE` 调整为 `12288k`
+- 固件类型：标准 6MiB Kernel 固件，使用上游默认 `KERNEL_SIZE=6144k`
 - 默认地址：`192.168.101.1`
 - 默认 Wi-Fi：`Athena`
 - 默认 Wi-Fi 密码：`77915558`
@@ -29,17 +29,17 @@ An ImmortalWrt GitHub Actions build project for JDCloud Athena / JDC AX6600 (`jd
 - 添加 eMMC、分区扩容、自动挂载相关组件，包括 `block-mount`、`kmod-mmc`、`kmod-sdhci-msm`、`resize2fs`、`tune2fs` 等。
 - 补齐 `ones20250/Openwrt-AX6600` 中启用而本仓库缺少的插件和包，包括 Sentinel、ARP bind、firewall4、NSS 驱动组、`athena-led-control`、`iptasn`、`iperf3`、OpenSSL 与 USB QMI 相关模块。
 - 保留高通平台相关处理：NSS feed 控制、NSS 固件版本设置、NSS init 启动顺序调整、`ARM64_BRBE` 关闭。
-- 参考 `davidtall/OpenWRT-CI` 的大分区路线，将 `jdcloud_re-cs-02` 的 `KERNEL_SIZE` 从默认 `6144k` 调整为 `12288k`。
-- 保留 daed/eBPF/BTF、HomeProxy、OpenClash、Tailscale、EasyTier、ZeroTier、Samba、AdGuardHome、SQM、TTYD 等常用插件。
+- 为适配默认 6MiB `uImage.itb` 限制，精简 daed/eBPF/BTF 调试组合并启用内核体积优化。
+- 保留 HomeProxy、OpenClash、sing-box-tiny、Tailscale、EasyTier、ZeroTier、Samba、AdGuardHome、SQM、TTYD 等常用插件。
 
-### 刷机提醒
+### Kernel 体积说明
 
-本仓库当前产物面向已刷 2G 大分区和对应 U-Boot 的京东云雅典娜 / JDC AX6600。普通 6MiB kernel 分区环境不建议刷入本固件，否则可能因 kernel 分区不足导致刷写或启动失败。
+京东云雅典娜 `jdcloud_re-cs-02` 上游镜像定义默认 `KERNEL_SIZE=6144k`。`daed` 会引入 eBPF/BTF/XDP/KPROBE 等内核调试能力，容易让 `uImage.itb` 超过 6MiB，因此本仓库默认关闭 daed 主包及其 BPF/BTF 内核组合，优先保证标准分区 `.bin` 固件可以生成。
 
 ### GitHub Actions 手动编译
 
 1. 进入 GitHub Actions。
-2. 选择 `京东云雅典娜2G大分区固件` workflow。
+2. 选择 `京东云雅典娜固件` workflow。
 3. 点击 `Run workflow`。
 4. 如需临时增删配置，在 `PACKAGE` 输入框填入额外 `.config` 行，多行使用换行分隔。
 5. 如只想生成配置文件，将 `TEST` 设为 `true`。
@@ -67,7 +67,7 @@ An ImmortalWrt GitHub Actions build project for JDCloud Athena / JDC AX6600 (`jd
 
 ### 自动编译
 
-`Auto-Build` 每 10 天检查一次 `VIKINGYFY/immortalwrt:main` 近期更新。检测到上游更新后，会先清理旧 Release 和 workflow 运行记录，再触发 `京东云雅典娜2G大分区固件` 正式编译。
+`Auto-Build` 每 10 天检查一次 `VIKINGYFY/immortalwrt:main` 近期更新。检测到上游更新后，会先清理旧 Release 和 workflow 运行记录，再触发 `京东云雅典娜固件` 正式编译。
 
 ### 目录结构
 
@@ -94,21 +94,21 @@ An ImmortalWrt GitHub Actions build project for JDCloud Athena / JDC AX6600 (`jd
 - `VIKINGYFY/OpenWRT-CI`：IPQ60XX/QCA 通用配置、NSS 相关处理、包管理脚本。
 - `ones20250/Openwrt-AX6600`：AX6600 单设备 profile、eMMC/LED/无线/内存调优设置。
 - `iamdjofoburs/Openwrt-AX6600`：AX6600 标准 6MiB Kernel 限制下的轻量配置对照。
-- `davidtall/OpenWRT-CI`：daed/eBPF 大分区路线和 `KERNEL_SIZE=12288k` 处理方式。
+- `davidtall/OpenWRT-CI`：daed/eBPF 大分区路线对照，用于评估后未作为默认方案采用。
 - `unraveloop/JDC-AX6600-Athena-LED-Controller`：雅典娜 LED 屏 LuCI 插件。
 
 ## English
 
 ### Purpose
 
-This repository builds 2G large-partition ImmortalWrt firmware for JDCloud Athena / JDC AX6600 through GitHub Actions. The package baseline follows `yjy116/Immortalwrt-CI-GL-AXT1800`, with AXT1800 fan-control pieces removed. Device-specific settings for eMMC, LED, NSS, wireless tuning, partition tools, and large-partition kernel sizing are merged from the referenced AX6600 repositories.
+This repository builds standard 6 MiB Kernel ImmortalWrt firmware for JDCloud Athena / JDC AX6600 through GitHub Actions. The package baseline follows `yjy116/Immortalwrt-CI-GL-AXT1800`, with AXT1800 fan-control pieces removed. Device-specific settings for eMMC, LED, NSS, wireless tuning, and partition tools are merged from the referenced AX6600 repositories.
 
 ### Device
 
 - Device: JDCloud Athena / JDC AX6600
 - OpenWrt profile: `jdcloud_re-cs-02`
 - Target: `qualcommax/ipq60xx`
-- Firmware type: 2G large-partition build with `KERNEL_SIZE=12288k` for `jdcloud_re-cs-02`
+- Firmware type: standard 6 MiB Kernel build with the upstream default `KERNEL_SIZE=6144k`
 - Default address: `192.168.101.1`
 - Default Wi-Fi SSID: `Athena`
 - Default Wi-Fi password: `77915558`
@@ -122,16 +122,16 @@ This repository builds 2G large-partition ImmortalWrt firmware for JDCloud Athen
 - Adds eMMC, partition expansion, and automount packages such as `block-mount`, `kmod-mmc`, `kmod-sdhci-msm`, `resize2fs`, and `tune2fs`.
 - Adds plugin and package selections enabled by `ones20250/Openwrt-AX6600` but missing here, including Sentinel, ARP bind, firewall4, NSS driver packages, `athena-led-control`, `iptasn`, `iperf3`, OpenSSL, and USB QMI modules.
 - Keeps Qualcomm platform handling for NSS feed control, NSS firmware version, NSS init order, and `ARM64_BRBE` disablement.
-- Follows the large-partition route from `davidtall/OpenWRT-CI` and sets `jdcloud_re-cs-02` `KERNEL_SIZE` from the default `6144k` to `12288k`.
-- Keeps daed/eBPF/BTF, HomeProxy, OpenClash, Tailscale, EasyTier, ZeroTier, Samba, AdGuardHome, SQM, and TTYD.
+- Trims daed/eBPF/BTF debug-heavy kernel features and enables kernel size optimization for the default 6 MiB `uImage.itb` limit.
+- Keeps HomeProxy, OpenClash, sing-box-tiny, Tailscale, EasyTier, ZeroTier, Samba, AdGuardHome, SQM, and TTYD.
 
-### Flashing Notice
+### Kernel Size
 
-The generated images target JDCloud Athena / JDC AX6600 devices already using the 2G large-partition layout and matching U-Boot. They are not recommended for the stock 6 MiB kernel partition layout because the kernel image may not fit.
+The upstream `jdcloud_re-cs-02` image definition uses `KERNEL_SIZE=6144k`. `daed` requires eBPF/BTF/XDP/KPROBE-related kernel features, which can push `uImage.itb` beyond 6 MiB. This repository disables the daed main package and its BPF/BTF kernel stack by default to prioritize standard `.bin` image generation.
 
 ### Build
 
-Run the `京东云雅典娜2G大分区固件` workflow manually from GitHub Actions. Use `PACKAGE` to append temporary `.config` lines, and set `TEST` to `true` when you only want to generate the final config without compiling firmware.
+Run the `京东云雅典娜固件` workflow manually from GitHub Actions. Use `PACKAGE` to append temporary `.config` lines, and set `TEST` to `true` when you only want to generate the final config without compiling firmware.
 
 The generated firmware and final config are uploaded to GitHub Releases.
 

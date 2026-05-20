@@ -266,16 +266,16 @@ jobs:
           tag_name: ${{ env.WRT_CONFIG }}-${{ env.WRT_INFO }}-${{ env.WRT_BRANCH }}-${{ env.WRT_DATE }}
           files: ./wrt/upload/*.*
           body: |
-            中文：京东云雅典娜 / JDC AX6600 (`jdcloud_re-cs-02`) 2G 大分区固件。
-            重要提示：本固件构建时将 `KERNEL_SIZE` 调整为 `12288k`，适用于已刷 2G 大分区/对应 U-Boot 的设备，不建议普通 6MiB kernel 分区设备刷入。
+            中文：京东云雅典娜 / JDC AX6600 (`jdcloud_re-cs-02`) 标准 6MiB Kernel 固件。
+            说明：为适配默认 `KERNEL_SIZE=6144k`，已精简 daed/eBPF/BTF 内核调试组合。
             源码：${{ env.WRT_REPO }}；分支：${{ env.WRT_BRANCH }}；提交：${{ env.WRT_HASH }}
             配置：${{ env.WRT_CONFIG }}；平台：${{ env.WRT_TARGET }}；设备：${{ env.WRT_DEVICE }}
             登录地址：${{ env.WRT_IP }}；登录密码：${{ env.WRT_PW }}
             WIFI 名称：${{ env.WRT_SSID }}；WIFI 密码：${{ env.WRT_WORD }}
             内核版本：${{ env.WRT_KVER }}；LuCI 插件：${{ env.WRT_LIST }}
 
-            English: 2G large-partition firmware for JDCloud Athena / JDC AX6600 (`jdcloud_re-cs-02`).
-            Important: This build sets `KERNEL_SIZE` to `12288k`; it is intended for devices already using the 2G large-partition layout and matching U-Boot, not the stock 6 MiB kernel partition layout.
+            English: Standard 6 MiB Kernel firmware for JDCloud Athena / JDC AX6600 (`jdcloud_re-cs-02`).
+            Note: daed/eBPF/BTF kernel debug features are trimmed to fit the default `KERNEL_SIZE=6144k` limit.
             Source: ${{ env.WRT_REPO }}; branch: ${{ env.WRT_BRANCH }}; commit: ${{ env.WRT_HASH }}
             Config: ${{ env.WRT_CONFIG }}; target: ${{ env.WRT_TARGET }}; device: ${{ env.WRT_DEVICE }}
             Login address: ${{ env.WRT_IP }}; login password: ${{ env.WRT_PW }}

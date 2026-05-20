@@ -66,31 +66,6 @@ EOF
 	chmod +x "$defaults_file"
 }
 
-set_jdc_ax6600_large_partition_kernel_size() {
-	local image_file="./target/linux/qualcommax/image/ipq60xx.mk"
-	local device_block
-
-	if [ ! -f "$image_file" ]; then
-		echo "Missing Qualcomm IPQ60xx image file: $image_file" >&2
-		exit 1
-	fi
-
-	if ! grep -q "^define Device/jdcloud_re-cs-02" "$image_file"; then
-		echo "Missing jdcloud_re-cs-02 image definition in $image_file" >&2
-		exit 1
-	fi
-
-	sed -i "/^define Device\/jdcloud_re-cs-02/,/^endef/ s/KERNEL_SIZE := [0-9][0-9]*k/KERNEL_SIZE := 12288k/" "$image_file"
-	device_block=$(sed -n "/^define Device\/jdcloud_re-cs-02/,/^endef/p" "$image_file")
-
-	if ! printf '%s\n' "$device_block" | grep -q "KERNEL_SIZE := 12288k"; then
-		echo "Failed to set jdcloud_re-cs-02 KERNEL_SIZE to 12288k" >&2
-		exit 1
-	fi
-
-	printf '%s\n' "$device_block" | grep -E "Device/jdcloud_re-cs-02|KERNEL_SIZE"
-}
-
 apply_sed_to_matches "./feeds/luci/collections/" "Makefile" "/attendedsysupgrade/d"
 apply_sed_to_matches "./feeds/luci/collections/" "Makefile" "s/luci-theme-bootstrap/luci-theme-$WRT_THEME/g"
 apply_sed_to_matches "./feeds/luci/modules/luci-mod-system/" "flash.js" "s/192\\.168\\.[0-9]*\\.[0-9]*/$WRT_IP/g"
@@ -132,7 +107,6 @@ if [[ "${WRT_TARGET^^}" == *"QUALCOMMAX"* ]]; then
 	echo "CONFIG_FEED_sqm_scripts_nss=n" >> ./.config
 	echo "CONFIG_NSS_FIRMWARE_VERSION_12_5=y" >> ./.config
 	echo "CONFIG_PACKAGE_kmod-usb-serial-qualcomm=y" >> ./.config
-	set_jdc_ax6600_large_partition_kernel_size
 	write_network_accel_defaults
 fi
 
