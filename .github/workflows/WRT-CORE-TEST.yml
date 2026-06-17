@@ -59,7 +59,7 @@ env:
   WRT_BRANCH: ${{inputs.WRT_BRANCH}}
   WRT_PACKAGE: ${{inputs.WRT_PACKAGE}}
   WRT_TEST: ${{inputs.WRT_TEST}}
-  WRT_DIR: 'wrt'
+  WRT_DIR: '/mnt/wrt'
   CI_NAME: ${{inputs.CI_NAME}}
   WRT_ARCH: ${{inputs.WRT_ARCH}}
 
@@ -88,12 +88,15 @@ jobs:
           echo "$WRT_REPO/$WRT_BRANCH" > "$GITHUB_WORKSPACE/repo_flag"
       - name: Clone Code
         run: |
-          git clone --depth=1 --single-branch --branch $WRT_BRANCH $WRT_REPO ./wrt/
+          sudo mkdir -p "$WRT_DIR"
+          sudo chown "$USER:$USER" "$WRT_DIR"
+          git clone --depth=1 --single-branch --branch $WRT_BRANCH $WRT_REPO "$WRT_DIR"
+          ln -sfn "$WRT_DIR" "$GITHUB_WORKSPACE/wrt"
 
-          cd ./wrt/ && echo "WRT_HASH=$(git log -1 --pretty=format:'%h')" >> $GITHUB_ENV
+          cd "$WRT_DIR" && echo "WRT_HASH=$(git log -1 --pretty=format:'%h')" >> $GITHUB_ENV
       - name: Custom Settings
         run: |
           . $GITHUB_WORKSPACE/Scripts/function.sh
-          cd ./wrt/    
+          cd "$WRT_DIR"
           generate_config && cat .config
      

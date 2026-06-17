@@ -59,7 +59,7 @@ env:
   WRT_BRANCH: ${{inputs.WRT_BRANCH}}
   WRT_PACKAGE: ${{inputs.WRT_PACKAGE}}
   WRT_TEST: ${{inputs.WRT_TEST}}
-  WRT_DIR: 'wrt'
+  WRT_DIR: '/mnt/wrt'
   CI_NAME: ${{inputs.CI_NAME}}
   WRT_ARCH: ${{inputs.WRT_ARCH}}
 
@@ -109,6 +109,8 @@ jobs:
           else
             echo "GO_INSTALLED=false" >> "$GITHUB_ENV"
           fi
+          sudo mkdir -p "$WRT_DIR"
+          sudo chown "$USER:$USER" "$WRT_DIR"
 #          sudo chown $USER:$GROUPS $GITHUB_WORKSPACE
 #          sudo mkdir -p /mnt/build_wrt
 #          sudo chown $USER:$USER /mnt/build_wrt
@@ -138,9 +140,10 @@ jobs:
           echo "$WRT_REPO/$WRT_BRANCH" > "$GITHUB_WORKSPACE/repo_flag"
       - name: Clone Code
         run: |
-          git clone --depth=1 --single-branch --branch $WRT_BRANCH $WRT_REPO ./wrt/
+          git clone --depth=1 --single-branch --branch $WRT_BRANCH $WRT_REPO "$WRT_DIR"
+          ln -sfn "$WRT_DIR" "$GITHUB_WORKSPACE/wrt"
 
-          cd ./wrt/ && echo "WRT_HASH=$(git log -1 --pretty=format:'%h')" >> $GITHUB_ENV
+          cd "$WRT_DIR" && echo "WRT_HASH=$(git log -1 --pretty=format:'%h')" >> $GITHUB_ENV
 
       - name: Check Scripts
         run: |
@@ -150,8 +153,8 @@ jobs:
         uses: actions/cache@v4
         with:
           path: |
-            ./wrt/.ccache
-            ./wrt/staging_dir
+            ${{ env.WRT_DIR }}/.ccache
+            ${{ env.WRT_DIR }}/staging_dir
           key: ${{ env.WRT_ARCH }}-${{ hashFiles('**/repo_flag') }}-${{ env.WRT_DATE }}
           restore-keys: |
             ${{ env.WRT_ARCH }}-${{ hashFiles('**/repo_flag') }}-
@@ -159,8 +162,8 @@ jobs:
 
       - name: Refresh the cache
         run: |
-          if [ -d "./wrt/staging_dir" ]; then
-            find "./wrt/staging_dir" -type d -name "stamp" -not -path "*target*" | while read -r dir; do
+          if [ -d "$WRT_DIR/staging_dir" ]; then
+            find "$WRT_DIR/staging_dir" -type d -name "stamp" -not -path "*target*" | while read -r dir; do
                 find "$dir" -type f -exec touch {} +
             done
           fi            
@@ -169,14 +172,14 @@ jobs:
 
       - name: Update Feeds
         run: |
-          cd ./wrt/
+          cd "$WRT_DIR"
 
           ./scripts/feeds update -a
           ./scripts/feeds install -a
 
       - name: Custom Packages
         run: |
-          cd ./wrt/package/
+          cd "$WRT_DIR/package"
 
           $GITHUB_WORKSPACE/Scripts/Packages.sh
           $GITHUB_WORKSPACE/Scripts/Handles.sh
@@ -184,7 +187,7 @@ jobs:
       - name: Custom Settings
         run: |
           . $GITHUB_WORKSPACE/Scripts/function.sh
-          cd ./wrt/
+          cd "$WRT_DIR"
           
           generate_config && cat .config
           
@@ -195,14 +198,14 @@ jobs:
       - name: Download Packages
         if: env.WRT_TEST != 'true'
         run: |
-          cd ./wrt/
+          cd "$WRT_DIR"
 
           make download -j$(nproc)
 
       - name: Compile Firmware
         if: env.WRT_TEST != 'true'
         run: |
-          cd ./wrt/
+          cd "$WRT_DIR"
 
           make -j$(nproc) || make -j1 V=s
 
@@ -214,12 +217,12 @@ jobs:
           done
           # 输出缓存状态
           echo "========cache status========"
-          echo "ccache: $(du -sh ./wrt/.ccache | cut -f 1)"
-          echo "staging: $(du -sh ./wrt/staging_dir | cut -f 1)"
+          echo "ccache: $(du -sh "$WRT_DIR/.ccache" | cut -f 1)"
+          echo "staging: $(du -sh "$WRT_DIR/staging_dir" | cut -f 1)"
 
       - name: Machine Information
         run: |
-          cd ./wrt/
+          cd "$WRT_DIR"
 
           echo "======================="
           lscpu | grep -E "name|Core|Thread"
@@ -231,7 +234,7 @@ jobs:
 
       - name: Package Firmware
         run: |
-          cd ./wrt/ && mkdir ./upload/
+          cd "$WRT_DIR" && mkdir ./upload/
 
           cp -f ./.config ./upload/Config-"$WRT_CONFIG"-"$WRT_INFO"-"$WRT_BRANCH"-"$WRT_DATE".txt
 
@@ -257,7 +260,7 @@ jobs:
         uses: softprops/action-gh-release@master
         with:
           tag_name: ${{env.CI_NAME}}-${{env.WRT_CONFIG}}_${{env.WRT_DATE}}
-          files: ./wrt/upload/*.*
+          files: ${{ env.WRT_DIR }}/upload/*.*
           body: |
             这是个平台固件包，内含多个设备！
             请注意选择你需要的设备固件！

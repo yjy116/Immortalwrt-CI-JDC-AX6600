@@ -1,6 +1,10 @@
 #!/bin/bash
 
-PKG_PATH="$GITHUB_WORKSPACE/$WRT_DIR/package/"
+if [[ "$WRT_DIR" = /* ]]; then
+	PKG_PATH="$WRT_DIR/package/"
+else
+	PKG_PATH="$GITHUB_WORKSPACE/$WRT_DIR/package/"
+fi
 
 #预置HomeProxy数据
 if [ -d *"homeproxy"* ]; then
