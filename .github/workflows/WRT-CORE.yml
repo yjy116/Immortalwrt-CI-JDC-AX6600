@@ -39,7 +39,7 @@ on:
         type: string
       WRT_TEST:
         required: false
-        type: string
+        type: boolean
       CI_NAME:
         required: false
         type: string
@@ -149,16 +149,22 @@ jobs:
         run: |
           find ./ -maxdepth 3 -type f -iregex ".*\(txt\|sh\)$" -exec dos2unix {} \; -exec chmod +x {} \;
 
-      - name: Cache Dependencies
+      - name: Cache Compiler Outputs
         uses: actions/cache@v4
         with:
-          path: |
-            ${{ env.WRT_DIR }}/.ccache
-            ${{ env.WRT_DIR }}/staging_dir
-          key: ${{ env.WRT_ARCH }}-${{ hashFiles('**/repo_flag') }}-${{ env.WRT_DATE }}
+          path: ${{ env.WRT_DIR }}/.ccache
+          key: ccache-${{ env.WRT_ARCH }}-${{ hashFiles('**/repo_flag') }}-${{ env.WRT_DATE }}
           restore-keys: |
-            ${{ env.WRT_ARCH }}-${{ hashFiles('**/repo_flag') }}-
-            ${{ env.WRT_ARCH }}-
+            ccache-${{ env.WRT_ARCH }}-${{ hashFiles('**/repo_flag') }}-
+            ccache-${{ env.WRT_ARCH }}-
+
+      - name: Cache Staging Dependencies
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.WRT_DIR }}/staging_dir
+          key: staging-${{ env.WRT_ARCH }}-${{ hashFiles('**/repo_flag') }}-${{ env.WRT_HASH }}-${{ env.WRT_DATE }}
+          restore-keys: |
+            staging-${{ env.WRT_ARCH }}-${{ hashFiles('**/repo_flag') }}-${{ env.WRT_HASH }}-
 
       - name: Refresh the cache
         run: |
@@ -212,9 +218,16 @@ jobs:
       - name: Delete Old Cache
         run: |
           # 获取缓存列表并删除
-          gh cache list --key ${{ env.WRT_ARCH }}-${{ hashFiles('**/repo_flag') }}- --json key --jq '.[] | .key' | while read -r key; do
-            gh cache delete "$key"
-          done
+          delete_cache_prefix() {
+            local prefix="$1"
+            gh cache list --limit 100 --json id,key --jq ".[] | select(.key | startswith(\"$prefix\")) | .id" | while read -r id; do
+              gh cache delete "$id"
+            done
+          }
+
+          delete_cache_prefix "ccache-${{ env.WRT_ARCH }}-${{ hashFiles('**/repo_flag') }}-"
+          delete_cache_prefix "staging-${{ env.WRT_ARCH }}-${{ hashFiles('**/repo_flag') }}-${{ env.WRT_HASH }}-"
+          delete_cache_prefix "${{ env.WRT_ARCH }}-${{ hashFiles('**/repo_flag') }}-"
           # 输出缓存状态
           echo "========cache status========"
           echo "ccache: $(du -sh "$WRT_DIR/.ccache" | cut -f 1)"
