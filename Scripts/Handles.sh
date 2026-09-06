@@ -6,6 +6,12 @@ else
 	PKG_PATH="$GITHUB_WORKSPACE/$WRT_DIR/package/"
 fi
 
+# Keep one conflict edge: reciprocal Mihomo conflicts form a Kconfig cycle.
+MIHOMO_ALPHA="${PKG_PATH}OpenWrt-nikki/mihomo-alpha/Makefile"
+if [ -f "$MIHOMO_ALPHA" ]; then
+	sed -i '/^[[:space:]]*CONFLICTS:=mihomo-meta[[:space:]]*$/d' "$MIHOMO_ALPHA"
+fi
+
 #预置HomeProxy数据
 if [ -d *"homeproxy"* ]; then
 	echo " "

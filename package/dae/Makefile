@@ -25,7 +25,8 @@ PKG_BUILD_PARALLEL:=1
 PKG_BUILD_FLAGS:=no-mips16
 
 GO_PKG:=github.com/daeuniverse/dae
-GO_PKG_EXCLUDES:=control/kern/tests
+# Match upstream's `go build .`; recursive targets include test-only tools.
+GO_PKG_BUILD_PKG:=$(GO_PKG)
 GO_PKG_LDFLAGS:= \
 	-s -w -buildid= \
 	-linkmode external -extldflags '-static -Wl,-s'
