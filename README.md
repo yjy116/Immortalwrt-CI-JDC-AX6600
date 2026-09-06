@@ -15,7 +15,7 @@ https://www.right.com.cn/forum/thread-8402269-1-1.html
 
 # 固件简要说明：
 
-固件每天早上4点自动编译。
+固件每周一早上4点自动清理旧版本，随后编译最新上游源码；也可在 Actions 中手动触发。
 
 固件信息里的时间为编译开始的时间，方便核对上游源码提交时间。
 
@@ -38,3 +38,7 @@ Config——自定义配置
 - luci-app-easytier
 - luci-app-usb-printer
 - luci-app-adguardhome
+- luci-app-mini-diskmanager
+
+源码构建时从 `VIKINGYFY/immortalwrt` 的 `main` 分支实时拉取，因此每次新构建都会使用当时的最新源码提交。
+已选插件优先跟随 ImmortalWrt feeds、VIKINGYFY/OpenWRT-CI 和项目基板维护的当前来源；设备无关插件不会盲目同步。

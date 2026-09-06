@@ -263,10 +263,10 @@ function install_dependencies() {
 		yarn config set registry "https://registry.npmmirror.com" --global
 	fi
 
-	apt install -y $BPO_FLAG golang-1.26-go
+	apt install -y $BPO_FLAG golang-1.25-go
 	rm -rf "/usr/bin/go" "/usr/bin/gofmt"
-	ln -svf "/usr/lib/go-1.26/bin/go" "/usr/bin/go"
-	ln -svf "/usr/lib/go-1.26/bin/gofmt" "/usr/bin/gofmt"
+	ln -svf "/usr/lib/go-1.25/bin/go" "/usr/bin/go"
+	ln -svf "/usr/lib/go-1.25/bin/gofmt" "/usr/bin/gofmt"
 	if [ -n "$CHN_NET" ]; then
 		go env -w GOPROXY=https://goproxy.cn,direct
 	fi
@@ -307,9 +307,6 @@ function install_dependencies() {
 	rm -rf "/usr/bin/po2lmo"
 	cp -fp "po2lmo" "/usr/bin/po2lmo"
 	popd
-
-	curl -fL "https://build-scripts.immortalwrt.org/modify-firmware.sh" -o "/usr/bin/modify-firmware"
-	chmod 0755 "/usr/bin/modify-firmware"
 
 	popd
 	rm -rf "$TMP_DIR"

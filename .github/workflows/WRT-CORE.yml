@@ -39,6 +39,7 @@ on:
         type: string
       WRT_TEST:
         required: false
+        default: false
         type: boolean
       CI_NAME:
         required: false
@@ -120,7 +121,7 @@ jobs:
         if: env.GO_INSTALLED != 'true'
         uses: actions/setup-go@v6
         with:
-          go-version: '1.26'
+          go-version: '1.25'
       - run: go version
 
       - name: Initialization Values
