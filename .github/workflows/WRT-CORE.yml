@@ -151,7 +151,7 @@ jobs:
           find ./ -maxdepth 3 -type f -iregex ".*\(txt\|sh\)$" -exec dos2unix {} \; -exec chmod +x {} \;
 
       - name: Cache Compiler Outputs
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ${{ env.WRT_DIR }}/.ccache
           key: ccache-${{ env.WRT_ARCH }}-${{ hashFiles('**/repo_flag') }}-${{ env.WRT_DATE }}
@@ -160,7 +160,7 @@ jobs:
             ccache-${{ env.WRT_ARCH }}-
 
       - name: Cache Staging Dependencies
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ${{ env.WRT_DIR }}/staging_dir
           key: staging-${{ env.WRT_ARCH }}-${{ hashFiles('**/repo_flag') }}-${{ env.WRT_HASH }}-${{ env.WRT_DATE }}
