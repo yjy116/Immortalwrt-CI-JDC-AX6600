@@ -1,0 +1,103 @@
+diff --git a/dae/Makefile b/dae/Makefile
+index d54d521..0d9fbc8 100644
+--- a/dae/Makefile
++++ b/dae/Makefile
+@@ -35 +35 @@ GO_PKG:=github.com/daeuniverse/dae
+-GO_PKG_EXCLUDES:=control/kern/tests
++GO_PKG_BUILD_PKG:=$(GO_PKG)
+diff --git a/dae/files/dae.init b/dae/files/dae.init
+index 394897e..1557dff 100644
+--- a/dae/files/dae.init
++++ b/dae/files/dae.init
+@@ -19,0 +20,9 @@ start_service() {
++	# Both backends share eBPF attachments; selection also applies at boot/CLI.
++	local active_backend
++	active_backend="$(uci -q get daede.config.active_backend)"
++	if [ "$active_backend" != "$CONF" ] || pidof daed >/dev/null 2>&1; then
++		logger -t dae-init 'Start refused: select dae and stop daed first.'
++		echo 'Start refused: select dae and stop daed first.' >&2
++		return 1
++	fi
++
+diff --git a/daed/Makefile b/daed/Makefile
+index 6046442..b0c6ea9 100644
+--- a/daed/Makefile
++++ b/daed/Makefile
+@@ -34,0 +35 @@ GO_PKG:=github.com/daeuniverse/dae-wing
++GO_PKG_BUILD_PKG:=$(GO_PKG)
+diff --git a/daed/files/daed.init b/daed/files/daed.init
+index 9277774..8e16fc2 100644
+--- a/daed/files/daed.init
++++ b/daed/files/daed.init
+@@ -29,0 +30,9 @@ start_service() {
++	# Both backends share eBPF attachments; selection also applies at boot/CLI.
++	local active_backend
++	active_backend="$(uci -q get daede.config.active_backend)"
++	if [ "$active_backend" != "$CONF" ] || pidof dae >/dev/null 2>&1; then
++		log 'Start refused: select daed and stop dae first.'
++		echo 'Start refused: select daed and stop dae first.' >&2
++		return 1
++	fi
++
+diff --git a/luci-app-daede/Makefile b/luci-app-daede/Makefile
+index f99f430..649a422 100644
+--- a/luci-app-daede/Makefile
++++ b/luci-app-daede/Makefile
+@@ -64,0 +65 @@ define Package/$(PKG_NAME)/install
++	$(INSTALL_BIN) ./root/etc/uci-defaults/89-daede-migrate $(1)/etc/uci-defaults/89-daede-migrate
+diff --git a/luci-app-daede/htdocs/luci-static/resources/view/daede/backend.js b/luci-app-daede/htdocs/luci-static/resources/view/daede/backend.js
+index f141f74..4715fb0 100644
+--- a/luci-app-daede/htdocs/luci-static/resources/view/daede/backend.js
++++ b/luci-app-daede/htdocs/luci-static/resources/view/daede/backend.js
+@@ -42,2 +42,5 @@ function execOk(cmd, args) {
+-	return L.resolveDefault(fs.exec(cmd, args || []), { code: 1 }).then(function(res) {
+-		return res && res.code === 0;
++	return fs.exec(cmd, args || []).then(function(res) {
++		// pidof returns 1 for no process; transport/command failures are not OFF.
++		if (!res || (res.code !== 0 && res.code !== 1))
++			throw new Error(res && (res.stderr || res.stdout) || 'Process status failed');
++		return res.code === 0;
+@@ -94,0 +98,14 @@ function loadActiveBackend() {
++function execChecked(cmd, args) {
++	return fs.exec(cmd, args).then(function(res) {
++		if (!res || res.code !== 0)
++			throw new Error(res && (res.stderr || res.stdout) || 'Command failed: ' + cmd);
++		return res;
++	});
++}
++
++function disableBackend(name) {
++	return execChecked('/sbin/uci', ['set', name + '.config.enabled=0'])
++		.then(function() { return execChecked('/sbin/uci', ['commit', name]); })
++		.then(function() { return execChecked(BACKENDS[name].initd, ['disable']); });
++}
++
+@@ -99 +116,13 @@ function setActiveBackend(name) {
+-	return exists('/etc/config/daede').then(function(ok) {
++	return detectRunning().then(function(running) {
++		if (running.dae || running.daed)
++			throw new Error('Stop both backends before switching.');
++		return detectInstalledBackends();
++	}).then(function(installed) {
++		if (!installed[name])
++			throw new Error('Backend is not installed: ' + name);
++		// Persist OFF for both, including stopped services still enabled at boot.
++		return ['dae', 'daed'].filter(function(key) { return installed[key]; })
++			.reduce(function(chain, key) {
++				return chain.then(function() { return disableBackend(key); });
++			}, Promise.resolve());
++	}).then(function() { return exists('/etc/config/daede'); }).then(function(ok) {
+@@ -102,3 +131,3 @@ function setActiveBackend(name) {
+-	}).then(function() { return fs.exec('/sbin/uci', ['set', 'daede.config=daede']); })
+-		.then(function() { return fs.exec('/sbin/uci', ['set', 'daede.config.active_backend=' + name]); })
+-		.then(function() { return fs.exec('/sbin/uci', ['commit', 'daede']); })
++	}).then(function() { return execChecked('/sbin/uci', ['set', 'daede.config=daede']); })
++		.then(function() { return execChecked('/sbin/uci', ['set', 'daede.config.active_backend=' + name]); })
++		.then(function() { return execChecked('/sbin/uci', ['commit', 'daede']); })
+diff --git a/luci-app-daede/htdocs/luci-static/resources/view/daede/widgets.js b/luci-app-daede/htdocs/luci-static/resources/view/daede/widgets.js
+index 843fcba..1ef130d 100644
+--- a/luci-app-daede/htdocs/luci-static/resources/view/daede/widgets.js
++++ b/luci-app-daede/htdocs/luci-static/resources/view/daede/widgets.js
+@@ -144 +144 @@ function renderBackendSwitcher(ctx, onSwitched, initialHint) {
+-					showHint(_('Switch failed.'));
++					showHint(_('Switch failed.') + ' ' + (e.message || e));
