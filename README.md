@@ -42,3 +42,11 @@ Config——自定义配置
 
 源码构建时从 `VIKINGYFY/immortalwrt` 的 `main` 分支实时拉取，因此每次新构建都会使用当时的最新源码提交。
 已选插件优先跟随 ImmortalWrt feeds、VIKINGYFY/OpenWRT-CI 和项目基板维护的当前来源；设备无关插件不会盲目同步。
+
+## DAED 版本
+
+DAED 更新至官方 [v2.1.1](https://github.com/daeuniverse/daed/releases/tag/v2.1.1)，源码提交为 `b3043aa7ce07c774c65e546112aa2c7a1c12edb5`，OpenWrt 包版本为 `2026.09.24`。
+`QiuSimons/luci-app-daed` 已归档，不会随重新编译自动更新其固定源码版本，因此使用 `patches/daed/010-update-v2.1.1.patch` 更新前端源码引用。
+保留现有 LuCI 管理界面、`wing-dc50308` 后端和包含 WAN 修复的 `core-5db27a0`；DAED 配置与数据库路径不变。升级前请备份 `/etc/daed/wing.db` 和 `/etc/config/daed`。
+
+DAED follows upstream release v2.1.1 through a version patch because its OpenWrt packaging repository is archived. The existing backend, WAN-fixed core and configuration paths are preserved.

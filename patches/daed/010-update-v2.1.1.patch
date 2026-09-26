@@ -1,0 +1,18 @@
+--- a/daed/Makefile
++++ b/daed/Makefile
+@@ -7,6 +7,6 @@
+ PKG_NAME:=daed
+-PKG_VERSION:=2026.08.26
+-DAED_VERSION:=daed-671e65d
++PKG_VERSION:=2026.09.24
++DAED_VERSION:=daed-v2.1.1
+ WING_VERSION:=wing-dc50308
+ CORE_VERSION:=core-5db27a0
+ WING_HASH_SHORT:=$(shell echo $(WING_VERSION) | cut -d- -f2)
+@@ -16,5 +16,5 @@
+ PKG_SOURCE:=$(PKG_NAME)-$(PKG_VERSION).tar.gz
+ PKG_SOURCE_PROTO:=git
+-PKG_SOURCE_VERSION:=671e65d2fdcd62fe6a3ec18ecda209c5addea898
++PKG_SOURCE_VERSION:=b3043aa7ce07c774c65e546112aa2c7a1c12edb5
+ PKG_SOURCE_URL:=https://github.com/daeuniverse/daed.git
+ PKG_MIRROR_HASH:=skip
