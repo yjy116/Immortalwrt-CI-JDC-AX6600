@@ -1,18 +1,41 @@
 #!/bin/sh
+set -eu
 
-CONFIG="/etc/config/athena_led"
-ROM_CONFIG="/rom/etc/config/athena_led"
-BACKUP_BASE="/etc/config/athena_led.config-migrated"
+ROOT=${IPKG_INSTROOT:-}
+CONFIG_DIR="$ROOT/etc/config"
+ROM_DIR="$ROOT/rom/etc/config"
+CONFIG="$CONFIG_DIR/athena_led"
+ROM_CONFIG="$ROM_DIR/athena_led"
+BACKUP_BASE="$CONFIG.config-migrated"
+
+schema() {
+	local legacy modern
+	legacy=$(uci -c "$1" -q get athena_led.config) || legacy=
+	modern=$(uci -c "$1" -q get athena_led.general) || modern=
+	case "$legacy:$modern" in
+		athena_led:) printf '%s\n' legacy ;;
+		:settings) printf '%s\n' modern ;;
+		*) return 1 ;;
+	esac
+}
 
 [ -f "$CONFIG" ] || exit 0
+[ -s "$ROM_CONFIG" ] || {
+	echo "Athena LED: missing package defaults at $ROM_CONFIG; configuration untouched" >&2
+	exit 1
+}
+expected=$(schema "$ROM_DIR") || {
+	echo 'Athena LED: unknown package configuration schema; configuration untouched' >&2
+	exit 1
+}
+current=$(schema "$CONFIG_DIR") || {
+	echo 'Athena LED: unknown or mixed current schema; configuration untouched' >&2
+	exit 1
+}
 
-# The older Athena LED package used athena_led.config.enable/lightLevel/tempFlag.
-# luci-app-athena-led 2.x reads athena_led.general.enabled/light_level/temp_sensors
-# instead, so a kept sysupgrade config prevents the service from starting.
-if ! uci -q get athena_led.config.enable >/dev/null 2>&1 &&
-	! grep -q "config athena_led 'config'" "$CONFIG"; then
-	exit 0
-fi
+# Match the installed package, not its age: VIKINGYFY ships config/enable.
+# Compatible configs retain custom settings, including an intentional disable.
+[ "$current" != "$expected" ] || exit 0
 
 backup="$BACKUP_BASE"
 index=0
@@ -20,46 +43,15 @@ while [ -e "$backup" ]; do
 	index=$((index + 1))
 	backup="${BACKUP_BASE}.${index}"
 done
+cp -p "$CONFIG" "$backup" || exit 1
 
-cp -a "$CONFIG" "$backup"
-rm -f "$CONFIG"
+# Keep the current file intact until the complete replacement is ready.
+replacement=$(mktemp "$CONFIG.XXXXXX") || exit 1
+trap 'rm -f "$replacement"' EXIT
+cp "$ROM_CONFIG" "$replacement" || exit 1
+mv -f "$replacement" "$CONFIG" || exit 1
+printf 'Athena LED: restored %s package defaults; previous config saved at %s\n' \
+	"$expected" "$backup"
 
-if [ -s "$ROM_CONFIG" ] &&
-	grep -q "config settings 'general'" "$ROM_CONFIG" &&
-	grep -q "option enabled '1'" "$ROM_CONFIG"; then
-	cp -a "$ROM_CONFIG" "$CONFIG"
-else
-	cat > "$CONFIG" <<'EOF'
-config settings 'general'
-	option enabled '1'
-	option profile_mode 'single'
-	option light_level '5'
-	option button_gpio '71'
-	option net_interface 'br-lan'
-	option wan_ip_custom_url 'http://checkip.amazonaws.com'
-	option custom_content 'Roc-Gateway'
-	option http_length '15'
-	option http_cache_secs '60'
-	option weather_city 'auto'
-	option weather_source 'uapis'
-	option weather_format 'simple'
-	option temp_sensors '4'
-	option enable_sleep '0'
-	option disable_led_clock '0'
-	option disable_led_medal '0'
-	option disable_led_up '0'
-	option disable_led_down '0'
-
-config single_module
-	option duration '5'
-	option module 'time_group'
-	option param 'time_sec'
-EOF
-fi
-
-if [ -x /etc/init.d/athena_led ]; then
-	/etc/init.d/athena_led enable >/dev/null 2>&1 || true
-	/etc/init.d/athena_led restart >/dev/null 2>&1 || true
-fi
-
+# uci-defaults runs during boot before S99athena_led; do not force autostart.
 exit 0

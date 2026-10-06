@@ -43,6 +43,24 @@ Config——自定义配置
 源码构建时从 `VIKINGYFY/immortalwrt` 的 `main` 分支实时拉取，因此每次新构建都会使用当时的最新源码提交。
 已选插件优先跟随 ImmortalWrt feeds、VIKINGYFY/OpenWRT-CI 和项目基板维护的当前来源；设备无关插件不会盲目同步。
 
+## 雅典娜 LED 屏幕配置修复
+
+首次启动以固件内 `/rom/etc/config/athena_led` 的实际配置格式为准，不再强制写入新版格式。当前 VIKINGYFY 插件读取 `config.enable`；旧迁移脚本误写成 `general.enabled`，会导致屏幕不亮。
+
+- 配置格式匹配时，保留亮度、显示项目及手动关闭状态，不强制启用服务。
+- 已知新旧格式不匹配时，先备份为 `/etc/config/athena_led.config-migrated`，已有备份则追加 `.1`、`.2` 等，再原子替换为固件默认配置。此时 LED 自定义选项需在界面重新设置；其他插件和网络设置不变。
+- 缺少固件默认配置、格式未知或写入失败时向标准错误输出明确报错，不生成猜测配置；失败的迁移脚本会保留，供继续排查。
+
+回归测试需要真实 OpenWrt `uci` 和 `ash`，不能在普通 Windows/Git Bash 中替代验证。把下面两个文件放到路由器同一临时目录后执行：
+
+```sh
+sh test_athena_led_config_migration_guard.sh ./99-athena-led-config-migration
+```
+
+文件分别位于 `tests/` 和 `files/etc/uci-defaults/`。测试只操作自动生成的临时配置，不修改当前 LED 或网络配置，覆盖配置保留、双向格式修复、备份、重复执行、异常配置和写入失败。
+
+LED migration now follows the installed package's ROM defaults. Compatible custom settings are preserved; known schema mismatches are backed up before atomic replacement. Unknown schemas and I/O failures remain explicit errors. Regression tests require real OpenWrt UCI and use isolated temporary fixtures.
+
 ## DAE / DAED 统一维护
 
 独立 `dae`、`daed` 和 `luci-app-daede` 均来自 [kenzok8/openwrt-daede](https://github.com/kenzok8/openwrt-daede)。旧 `QiuSimons/luci-app-daed`、本地 DAE 包覆盖及两个旧 LuCI 入口已移除，但保留两种代理后端功能。

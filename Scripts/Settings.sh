@@ -1,5 +1,8 @@
 #!/bin/bash
 . $(dirname "$(realpath "$0")")/function.sh
+# Install the LED repair into the firmware overlay for first boot/sysupgrade.
+install -Dm0755 "$GITHUB_WORKSPACE/files/etc/uci-defaults/99-athena-led-config-migration" \
+	./files/etc/uci-defaults/99-athena-led-config-migration || exit 1
 #移除luci-app-attendedsysupgrade
 sed -i "/attendedsysupgrade/d" $(find ./feeds/luci/collections/ -type f -name "Makefile")
 #修改默认主题
