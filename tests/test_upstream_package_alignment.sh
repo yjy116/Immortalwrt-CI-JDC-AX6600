@@ -35,7 +35,8 @@ if grep -Fq 'CONFIG_PACKAGE_luci-app-wolplus=y' "$GENERAL"; then
 	exit 1
 fi
 
-for package in luci-app-gecoosac luci-app-mini-diskmanager
+for package in luci-app-gecoosac luci-app-mini-diskmanager \
+  printer-support kmod-usb-printer p910nd luci-app-usb-printer
 do
 	grep -Fq "CONFIG_PACKAGE_${package}=y" "$GENERAL" || {
 		echo "missing selected upstream package: $package"

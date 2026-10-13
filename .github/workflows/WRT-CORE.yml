@@ -202,10 +202,11 @@ jobs:
 
           make defconfig -j$(nproc) && make clean -j$(nproc)
 
-      - name: 校验 Honk 与 DAE/DAED 插件选择
+      - name: 校验 Honk、DAE/DAED 与 USB 打印插件
         run: |
           cd "$WRT_DIR"
-          for package in honk luci-app-honk dae daed luci-app-daede; do
+          for package in honk luci-app-honk dae daed luci-app-daede \
+            printer-support kmod-usb-printer p910nd luci-app-usb-printer; do
             grep -Fxq "CONFIG_PACKAGE_${package}=y" .config || {
               echo "::error::Required package disappeared after defconfig: $package"
               exit 1

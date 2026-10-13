@@ -44,6 +44,8 @@ Config——自定义配置
 源码构建时从 `VIKINGYFY/immortalwrt` 的 `main` 分支实时拉取，因此每次新构建都会使用当时的最新源码提交。
 已选插件优先跟随 ImmortalWrt feeds、VIKINGYFY/OpenWRT-CI 和项目基板维护的当前来源；设备无关插件不会盲目同步。
 
+USB 打印保留 `luci-app-usb-printer`、`p910nd` 和 `kmod-usb-printer`。上游现在要求显式选择 `printer-support`（打印设备组及热插拔规则），本仓库已补齐；构建会在 `defconfig` 后核验整条依赖，避免驱动及界面被静默取消选择。实际 USB 打印仍需连接打印机验证。
+
 ## Honk 与内置 Doona
 
 新增 [kenzok8/openwrt-honk](https://github.com/kenzok8/openwrt-honk) 的 `honk` 和 `luci-app-honk`，保留原有 DAE、DAED、daede 管理界面及其他插件。Doona 静态界面随 `luci-app-honk` 安装到 `/usr/share/doona`，不需要另装 `luci-app-doona`，也不额外启动面板服务。
