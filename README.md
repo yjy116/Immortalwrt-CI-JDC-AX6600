@@ -39,9 +39,29 @@ Config——自定义配置
 - luci-app-usb-printer
 - luci-app-adguardhome
 - luci-app-mini-diskmanager
+- honk / luci-app-honk（内置 Doona）
 
 源码构建时从 `VIKINGYFY/immortalwrt` 的 `main` 分支实时拉取，因此每次新构建都会使用当时的最新源码提交。
 已选插件优先跟随 ImmortalWrt feeds、VIKINGYFY/OpenWRT-CI 和项目基板维护的当前来源；设备无关插件不会盲目同步。
+
+## Honk 与内置 Doona
+
+新增 [kenzok8/openwrt-honk](https://github.com/kenzok8/openwrt-honk) 的 `honk` 和 `luci-app-honk`，保留原有 DAE、DAED、daede 管理界面及其他插件。Doona 静态界面随 `luci-app-honk` 安装到 `/usr/share/doona`，不需要另装 `luci-app-doona`，也不额外启动面板服务。
+
+当前核验版本为 `2026.10.12-r1`，打包提交 `52ecdb1bb26e04be782bcb368973fd54d4a44af6`；核心来自 `Glassyiris/honk` 提交 `8b6778cefa12611492187ac2560f014452f0a64a`，Doona 为 `0.1.0-beta.20`、提交 `25fc26a7a17697c1c11a3b31f51940966ac86c2f`。
+
+构建采用上游已发布的静态 musl 核心（雅典娜使用 AArch64）和 Doona 静态资源，再由本仓库的 OpenWrt 工具链打包；**不是在本仓库重新编译 Rust 核心**。`Scripts/Honk.sh` 固定正式版本对应的 `source-38236606118` 资产，并校验三个生成文件的 SHA-256；核心和 Doona 归档继续由 OpenWrt 的 `PKG_HASH` 校验，不使用可变 `staging` 或跳过校验。每次 Release 附带 `HONK-SOURCE.txt`，记录提交、资源校验值和构建来源。后续跟进上游正式版本时需一起更新提交、来源 tag 和生成文件校验值，并复验两组固件，不单独替换核心二进制。
+
+使用说明：
+
+1. 固件保持上游默认：Honk 未初始化、未启用、不开机自启，不会自动接管现有 DAE/DAED。
+2. 使用 Honk 前，在 daede 界面停止当前 DAE/DAED 后端并关闭其开机自启；其他透明代理也应先停止。Honk 启动检查会对正在运行的 DAE/DAED 等代理明确报冲突，不会替你自动停止它们。
+3. 在「服务 → Honk」初始化、运行系统检查、配置节点或订阅后启动；初始化完成、服务运行且 API 就绪后，再进入 Doona。Honk 需要 Linux 6.12+、内核 BTF 和相应 eBPF 模块，本固件保留这些依赖。管理入口只应在可信 LAN 内使用，不要暴露到 WAN。
+4. 切回 DAE/DAED 前，先停止 Honk 并关闭其开机自启，再通过 daede 启动所选后端。daede 原有互斥仅覆盖 DAE 与 DAED，不能把它理解为 Honk 与 DAE/DAED 的双向自动互斥；不要同时开启两套透明代理。
+
+保留 LAN、Wi-Fi、LED 修复、12 MiB Kernel、NSS/eBPF 和缓存策略。主机静态检查和固件编译不等于实机转发验证；Honk/Doona 的启动、订阅、eBPF 转发与 NSS 交互仍需刷入后验证，本任务不会自动刷机或重启路由器。
+
+Honk and bundled Doona are added alongside DAE/DAED, disabled by default. The firmware packages hash-verified upstream static binaries and UI assets, with provenance in `HONK-SOURCE.txt`. Stop the active proxy before switching; on-device forwarding and NSS interaction are not yet validated.
 
 ## 雅典娜 LED 屏幕配置修复
 

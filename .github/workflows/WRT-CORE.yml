@@ -202,6 +202,16 @@ jobs:
 
           make defconfig -j$(nproc) && make clean -j$(nproc)
 
+      - name: 校验 Honk 与 DAE/DAED 插件选择
+        run: |
+          cd "$WRT_DIR"
+          for package in honk luci-app-honk dae daed luci-app-daede; do
+            grep -Fxq "CONFIG_PACKAGE_${package}=y" .config || {
+              echo "::error::Required package disappeared after defconfig: $package"
+              exit 1
+            }
+          done
+
       - name: Download Packages
         if: env.WRT_TEST != 'true'
         run: |
@@ -252,6 +262,7 @@ jobs:
 
           cp -f ./.config ./upload/Config-"$WRT_CONFIG"-"$WRT_INFO"-"$WRT_BRANCH"-"$WRT_DATE".txt
           cp ./package/openwrt-daede/ci/DAEDE-SOURCE.txt ./upload/DAEDE-SOURCE.txt
+          cp ./package/openwrt-honk/ci/HONK-SOURCE.txt ./upload/HONK-SOURCE.txt
 
           if [[ $WRT_TEST != 'true' ]]; then
             echo "WRT_KVER=$(find ./bin/targets/ -type f -name "*.manifest" -exec grep -oP '^kernel - \K[\d\.]+' {} \;)" >> $GITHUB_ENV

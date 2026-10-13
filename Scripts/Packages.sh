@@ -130,6 +130,7 @@ rm -rf ../feeds/packages/net/{v2ray-geodata,dae*}
 cp -r $GITHUB_WORKSPACE/package/* ./
 # DAE、DAED 和统一管理界面使用同一个已核验的维护源。
 bash "$GITHUB_WORKSPACE/Scripts/Daede.sh" "$PWD/openwrt-daede" || exit 1
+bash "$GITHUB_WORKSPACE/Scripts/Honk.sh" "$PWD/openwrt-honk" || exit 1
 #修复libubox报错
 #sed -i '/include $(INCLUDE_DIR)\/cmake.mk/a PKG_BUILD_FLAGS:=no-werror' ../package/libs/libubox/Makefile
 #sed -i 's|TARGET_CFLAGS += -I$(STAGING_DIR)/usr/include|& -Wno-error=format-nonliteral -Wno-format-nonliteral|' ../package/libs/libubox/Makefile
