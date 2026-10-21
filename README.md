@@ -65,6 +65,27 @@ USB 打印保留 `luci-app-usb-printer`、`p910nd` 和 `kmod-usb-printer`。上�
 
 Honk and bundled Doona are added alongside DAE/DAED, disabled by default. The firmware packages hash-verified upstream static binaries and UI assets, with provenance in `HONK-SOURCE.txt`. Stop the active proxy before switching; on-device forwarding and NSS interaction are not yet validated.
 
+## MiniUPnP 上游修复与自动接续
+
+MiniUPnP 继续跟随 feeds 更新，不固定为 `2.3.11`，不替换 LuCI、启动脚本或用户的 UPnP 配置。构建时补齐以下官方修复：
+
+- [2dcf639](https://github.com/miniupnp/miniupnp/commit/2dcf63959950dbb2c3f97b7bd63773d499749134)：启用 `ext_allow_private_ipv4` 时，WAN 断线后恢复为内网/CGNAT 地址，也能重新允许端口映射。
+- [a8de55a](https://github.com/miniupnp/miniupnp/commit/a8de55a0ae4829d59498667120d1e88933dc0f5d)：为 nftables `inet` 表的映射规则添加正确的 IPv4/IPv6 限定，同时包含其前置解析器重构 `320ebf5`。
+
+`Scripts/miniupnpd/install.py` 将钩子接入软件包的 `Prepare/Post`，在**解包和所有 feeds 补丁之后**检查实际源码。缺失时应用本仓库带 SHA-256 校验的官方补丁；上游已包含完整修复时记录 `already-present`，不重复打补丁，也不根据版本号猜测是否修复。冲突先在临时副本暴露，不把半套补丁写回源码。编译前再次核对修复及源码哈希，编译成功后生成来源记录。
+
+每次完整构建的 Release 附带 `MINIUPNPD-SOURCE.json`，包含当次软件包版本、两项修复的应用状态、官方提交及补丁/源码 SHA-256。包版本号仍由上游维护，因此不能只看 `miniupnpd --version` 判断是否带本地修复；在线包升级也可能覆盖固件里的修复，需核对来源或通过本仓库重编译。
+
+以后上游发布包含这些修复的新版本，会自动识别并跳过。**无法保证任意未来重构都无需适配**：若实现结构已改变且不能确认修复，构建明确失败并指出位置，需要重新审查，绝不静默跳过或退回旧版。升级不改变现有插件、LAN/Wi-Fi、LED、NSS/eBPF 或 12 MiB Kernel 配置。
+
+回归测试使用真实 `2.3.11` 源码、已修复的官方源码、ImmortalWrt 补丁和本机 C 编译器，覆盖重复执行、部分修复、冲突、篡改检测及 WAN 恢复和 nftables 地址族行为；测试固定版本仅是对照样本，不限制固件版本。Linux 下运行：
+
+```sh
+bash tests/run_miniupnpd_tests.sh
+```
+
+CI 每次自动执行以上测试。测试与编译成功不等于实机公网可达：CGNAT 上游的端口开放不受本机 MiniUPnP 控制；本项目不会自动刷机、重启路由器或放宽防火墙权限。
+
 ## 雅典娜 LED 屏幕配置修复
 
 首次启动以固件内 `/rom/etc/config/athena_led` 的实际配置格式为准，不再强制写入新版格式。当前 VIKINGYFY 插件读取 `config.enable`；旧迁移脚本误写成 `general.enabled`，会导致屏幕不亮。

@@ -150,6 +150,9 @@ jobs:
         run: |
           find ./ -maxdepth 3 -type f -iregex ".*\(txt\|sh\)$" -exec dos2unix {} \; -exec chmod +x {} \;
 
+      - name: 校验 MiniUPnP 补丁升级兼容性
+        run: bash "$GITHUB_WORKSPACE/tests/run_miniupnpd_tests.sh"
+
       - name: Cache Compiler Outputs
         uses: actions/cache@v5
         with:
@@ -201,6 +204,11 @@ jobs:
           $GITHUB_WORKSPACE/Scripts/Settings.sh
 
           make defconfig -j$(nproc) && make clean -j$(nproc)
+
+      - name: 安装 MiniUPnP 上游修复钩子
+        run: |
+          python3 "$GITHUB_WORKSPACE/Scripts/miniupnpd/install.py" "$WRT_DIR/feeds/packages/net/miniupnpd"
+          grep -Fxq 'CONFIG_PACKAGE_miniupnpd-nftables=y' "$WRT_DIR/.config"
 
       - name: 校验 Honk、DAE/DAED 与 USB 打印插件
         run: |
@@ -266,6 +274,8 @@ jobs:
           cp ./package/openwrt-honk/ci/HONK-SOURCE.txt ./upload/HONK-SOURCE.txt
 
           if [[ $WRT_TEST != 'true' ]]; then
+            test -s ./miniupnpd-nftables-backports.json
+            cp ./miniupnpd-nftables-backports.json ./upload/MINIUPNPD-SOURCE.json
             echo "WRT_KVER=$(find ./bin/targets/ -type f -name "*.manifest" -exec grep -oP '^kernel - \K[\d\.]+' {} \;)" >> $GITHUB_ENV
             echo "WRT_LIST=$(find ./bin/targets/ -type f -name "*.manifest" -exec grep -oP '^luci-(app|theme)[^ ]*' {} \; | tr '\n' ' ')" >> $GITHUB_ENV
 
