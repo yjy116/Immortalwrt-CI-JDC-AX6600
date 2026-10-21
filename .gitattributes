@@ -1,2 +1,5 @@
 Scripts/miniupnpd/** text eol=lf
 Scripts/miniupnpd/patches/*.patch -whitespace
+Scripts/luci_upnp/** text eol=lf
+tests/*luci_upnp* text eol=lf
+tests/fixtures/luci_upnp/** text eol=lf

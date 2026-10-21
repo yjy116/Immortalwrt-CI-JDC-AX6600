@@ -86,6 +86,18 @@ bash tests/run_miniupnpd_tests.sh
 
 CI 每次自动执行以上测试。测试与编译成功不等于实机公网可达：CGNAT 上游的端口开放不受本机 MiniUPnP 控制；本项目不会自动刷机、重启路由器或放宽防火墙权限。
 
+### LuCI 端口映射显示兼容
+
+映射在内核中生效而页面显示为空，也可能是 `/usr/share/rpcd/ucode/luci.upnp` 的解析问题。新版 nft 规则包含 `counter packets … bytes …`，并可能把旧的 `@nh,72,8` 协议表达式显示为 `ip protocol tcp/udp`，旧 LuCI 解析器会漏掉这些规则。
+
+本项目参考 [OpenWrt LuCI PR #9148](https://github.com/openwrt/luci/pull/9148) 的计数字段修复和 [PR #8415](https://github.com/openwrt/luci/pull/8415) 的协议格式适配，只修改 nft 状态读取的五行代码，兼容新旧格式及 TCP/UDP。**两项提案在 2026-10-21 核对时均未合并**；本仓库是经过回归验证的局部适配，不是宣称已经发布的官方修复，也不引入提案中的 UCI、权限或租约格式改版。
+
+构建时 `Scripts/luci_upnp/install.py` 先验证实际 feeds 解析器：已兼容则保持上游文件不变，已知旧实现才应用修复；未知实现或测试失败会明确报错，不覆盖整包、不锁定 LuCI 版本。Release 的 `LUCI-UPNP-SOURCE.json` 记录修复状态、参考来源与文件前后 SHA-256。在线升级 `luci-app-upnp` 可能覆盖固件修复，应核对新包或重新构建。
+
+本地基础检查：`python tests/test_luci_upnp.py`（需要 Node.js）。Linux 原生 ucode 回归：`bash tests/run_luci_upnp_tests.sh`（需要 Git、CMake、C 编译器、libjson-c-dev、Node.js、Python 3）；各测试命令限制为 60 秒。CI 对实际 feeds 文件再次执行原生 ucode 测试。所有测试使用离线规则输入，不创建真实端口映射，不更改代理或网络服务；原生测试只固定测试解释器版本，不固定固件的软件包版本。
+
+实机验收应先记录已有映射，再用未占用的高端口建立短时 TCP/UDP 测试映射，对照内核规则、`luci.upnp.get_status` 与网页，最后通过 UPnP 删除自己创建的测试映射并回查。不要用页面的整服务重启路径清理测试，不删除业务映射。离线回归通过不等于已验证实机页面、qBittorrent 自动申请或公网可达。
+
 ## 雅典娜 LED 屏幕配置修复
 
 首次启动以固件内 `/rom/etc/config/athena_led` 的实际配置格式为准，不再强制写入新版格式。当前 VIKINGYFY 插件读取 `config.enable`；旧迁移脚本误写成 `general.enabled`，会导致屏幕不亮。

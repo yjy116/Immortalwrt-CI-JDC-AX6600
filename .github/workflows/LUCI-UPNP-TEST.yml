@@ -1,0 +1,32 @@
+name: LuCI 端口映射回归测试
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'Scripts/luci_upnp/**'
+      - 'tests/*luci_upnp*'
+      - 'tests/fixtures/luci_upnp/**'
+      - '.github/workflows/LUCI-UPNP-TEST.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  parser:
+    name: 核验新版与旧版 nft 映射显示
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: 准备 ucode 编译依赖
+        run: sudo apt-get update && sudo apt-get install -y cmake libjson-c-dev
+      - name: 执行解析器与上游升级回归测试
+        run: bash tests/run_luci_upnp_tests.sh
+      - name: 核验当前 ImmortalWrt LuCI feeds
+        run: |
+          source="$RUNNER_TEMP/current-luci.upnp"
+          curl -fsSL https://raw.githubusercontent.com/immortalwrt/luci/master/applications/luci-app-upnp/root/usr/share/rpcd/ucode/luci.upnp -o "$source"
+          python3 Scripts/luci_upnp/install.py "$source" --receipt "$RUNNER_TEMP/LUCI-UPNP-SOURCE.json"
+          node Scripts/luci_upnp/check_parser.cjs "$source" --extract > "$RUNNER_TEMP/current-reader.uc"
+          timeout 60s "$LUCI_UPNP_UCODE" -L "$LUCI_UPNP_LIB" tests/test_luci_upnp.uc \
+            "$RUNNER_TEMP/current-reader.uc" Scripts/luci_upnp/cases.json

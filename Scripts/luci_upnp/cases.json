@@ -1,0 +1,19 @@
+[
+  {"name":"legacy-tcp","line":"\t\tiif \"pppoe-wan\" @nh,72,8 0x6 th dport 60281 dnat ip to 192.168.100.1:60281","proto":"TCP"},
+  {"name":"legacy-udp","line":"\t\tiif \"pppoe-wan\" @nh,72,8 0x11 th dport 60281 dnat ip to 192.168.100.1:60281","proto":"UDP"},
+  {"name":"legacy-tcp-counter","line":"\t\tiif \"pppoe-wan\" @nh,72,8 0x6 th dport 60281 counter packets 0 bytes 0 dnat ip to 192.168.100.1:60281 # handle 1253","proto":"TCP"},
+  {"name":"legacy-udp-counter","line":"    iif \"eth1\" @nh,72,8 0x11 th dport 60281 counter packets 29 bytes 123456 dnat ip to 192.168.100.1:60281","proto":"UDP"},
+  {"name":"live-20261021-tcp","line":"\t\tiif \"pppoe-wan\" ip protocol tcp tcp dport 60281 counter packets 0 bytes 0 dnat ip to 192.168.100.1:60281","proto":"TCP"},
+  {"name":"decoded-udp-counter","line":"\t\tiif \"pppoe-wan\" ip protocol udp udp dport 60281 counter packets 142 bytes 21300 dnat ip to 192.168.100.1:60281","proto":"UDP"},
+  {"name":"decoded-tcp-no-counter","line":"\t\tiif \"pppoe-wan\" ip protocol tcp tcp dport 60281 dnat ip to 192.168.100.1:60281","proto":"TCP"},
+  {"name":"decoded-udp-no-counter","line":"iif \"pppoe-wan\" ip protocol udp th dport 60281 dnat ip to 192.168.100.1:60281 # handle 1252","proto":"UDP"},
+  {"name":"decoded-with-comments","line":"  iif \"pppoe-wan\" ip protocol tcp tcp dport 60281 counter packets 123456789012 bytes 999999999999 dnat ip to 192.168.100.1:60281 comment \"qBittorrent\" # handle 42","proto":"TCP"},
+  {"name":"port-translation","line":"\t\tiif \"pppoe-wan\" ip protocol tcp tcp dport 52100 counter packets 1 bytes 60 dnat ip to 192.168.100.20:51413","proto":"TCP","extport":52100,"intport":51413,"intaddr":"192.168.100.20"},
+  {"name":"empty","line":"","proto":null},
+  {"name":"chain-header","line":"\tchain upnp_prerouting {","proto":null},
+  {"name":"non-mapping","line":"\t\tiif \"pppoe-wan\" ip protocol tcp tcp dport 60281 counter packets 0 bytes 0 accept","proto":null},
+  {"name":"ipv6-not-ipv4","line":"\t\tiif \"pppoe-wan\" ip6 nexthdr tcp tcp dport 60281 dnat ip6 to [fd00::1]:60281","proto":null},
+  {"name":"unsupported-protocol","line":"\t\tiif \"pppoe-wan\" @nh,72,8 0x84 th dport 60281 dnat ip to 192.168.100.1:60281","proto":null},
+  {"name":"malformed-counter","line":"\t\tiif \"pppoe-wan\" @nh,72,8 0x6 th dport 60281 counter packets broken bytes 0 dnat ip to 192.168.100.1:60281","proto":null},
+  {"name":"comment-not-rule","line":"# iif \"pppoe-wan\" ip protocol tcp tcp dport 60281 dnat ip to 192.168.100.1:60281","proto":null}
+]

@@ -153,6 +153,11 @@ jobs:
       - name: 校验 MiniUPnP 补丁升级兼容性
         run: bash "$GITHUB_WORKSPACE/tests/run_miniupnpd_tests.sh"
 
+      - name: 校验 LuCI 端口映射解析兼容性
+        run: |
+          sudo apt-get install -y cmake libjson-c-dev
+          bash "$GITHUB_WORKSPACE/tests/run_luci_upnp_tests.sh"
+
       - name: Cache Compiler Outputs
         uses: actions/cache@v5
         with:
@@ -209,6 +214,15 @@ jobs:
         run: |
           python3 "$GITHUB_WORKSPACE/Scripts/miniupnpd/install.py" "$WRT_DIR/feeds/packages/net/miniupnpd"
           grep -Fxq 'CONFIG_PACKAGE_miniupnpd-nftables=y' "$WRT_DIR/.config"
+
+      - name: 修复并核验 LuCI 端口映射显示
+        run: |
+          source="$WRT_DIR/feeds/luci/applications/luci-app-upnp/root/usr/share/rpcd/ucode/luci.upnp"
+          python3 "$GITHUB_WORKSPACE/Scripts/luci_upnp/install.py" "$source" --receipt "$WRT_DIR/LUCI-UPNP-SOURCE.json"
+          node "$GITHUB_WORKSPACE/Scripts/luci_upnp/check_parser.cjs" "$source" --extract > "$RUNNER_TEMP/luci-upnp-reader.uc"
+          timeout 60s "$LUCI_UPNP_UCODE" -L "$LUCI_UPNP_LIB" "$GITHUB_WORKSPACE/tests/test_luci_upnp.uc" \
+            "$RUNNER_TEMP/luci-upnp-reader.uc" "$GITHUB_WORKSPACE/Scripts/luci_upnp/cases.json"
+          grep -Fxq 'CONFIG_PACKAGE_luci-app-upnp=y' "$WRT_DIR/.config"
 
       - name: 校验 Honk、DAE/DAED 与 USB 打印插件
         run: |
@@ -272,6 +286,7 @@ jobs:
           cp -f ./.config ./upload/Config-"$WRT_CONFIG"-"$WRT_INFO"-"$WRT_BRANCH"-"$WRT_DATE".txt
           cp ./package/openwrt-daede/ci/DAEDE-SOURCE.txt ./upload/DAEDE-SOURCE.txt
           cp ./package/openwrt-honk/ci/HONK-SOURCE.txt ./upload/HONK-SOURCE.txt
+          cp ./LUCI-UPNP-SOURCE.json ./upload/LUCI-UPNP-SOURCE.json
 
           if [[ $WRT_TEST != 'true' ]]; then
             test -s ./miniupnpd-nftables-backports.json
