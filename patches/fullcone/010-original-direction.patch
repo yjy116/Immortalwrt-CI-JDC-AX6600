@@ -1,0 +1,22 @@
+Subject: [PATCH] netfilter: restore original direction after fullcone lookup
+
+Backport the tuple-direction correction from openwrt-sonic-fullcone:
+https://github.com/mufeng05/openwrt-sonic-fullcone/commit/e5cbaad43fe15c8f879a0f456b448d578c0eac4d
+
+nf_ct_invert_tuple() leaves dst.dir at REPLY. Restore ORIGINAL before
+returning the inbound tuple so replies receive NAT. Retain OWRT's locking,
+isolated reservations and flowtable/PPE integration unchanged.
+
+--- a/net/netfilter/nf_nat_core.c
++++ b/net/netfilter/nf_nat_core.c
+@@ -646,6 +646,10 @@ find_appropriate_dst(struct net *net,
+ 			nf_ct_invert_tuple(result,
+ 					   &ct->tuplehash[IP_CT_DIR_ORIGINAL].tuple);
+ 			result->src = tuple->src;
++			/* nf_ct_invert_tuple() set dir to REPLY, but result
++			 * is an original-direction tuple.
++			 */
++			result->dst.dir = IP_CT_DIR_ORIGINAL;
+ 			found = 1;
+ 			break;
+ 		}

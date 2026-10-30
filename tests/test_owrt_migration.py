@@ -70,7 +70,7 @@ class MigrationTests(unittest.TestCase):
                 self.config.write_text(original)
                 owrt.prepare(self.root, profile)
                 config = self.config.read_text()
-                for name in ("fullconenat-sonic", "kmod-usb-xhci-hcd", "kmod-usb3",
+                for name in ("fullconenat-sonic", "luci-app-fullconenat-sonic", "kmod-usb-xhci-hcd", "kmod-usb3",
                              "kmod-sound-core", "kmod-usb-audio", "audio-support"):
                     self.assertIn(f"CONFIG_PACKAGE_{name}=y\n", config)
                 self.assertNotIn("CONFIG_PACKAGE_kmod-nft-fullcone", config)
@@ -92,7 +92,7 @@ class MigrationTests(unittest.TestCase):
             "# CONFIG_PACKAGE_kmod-usb-xhci is not set\n"
             "# CONFIG_PACKAGE_kmod-usb-audio is not set\n")
         owrt.prepare(self.root, "IPQ60XX-WIFI")
-        for name in ("fullconenat-sonic", "kmod-usb-xhci-hcd", "audio-support"):
+        for name in ("fullconenat-sonic", "luci-app-fullconenat-sonic", "kmod-usb-xhci-hcd", "audio-support"):
             self.assertNotIn(f"CONFIG_PACKAGE_{name}=y", self.config.read_text())
 
     def test_replacement_or_audio_gate_loss_still_fails_verification(self):
@@ -102,7 +102,7 @@ class MigrationTests(unittest.TestCase):
         owrt.prepare(self.root, "IPQ60XX-WIFI")
         requested = self.config.read_text()
         (self.root / ".config.requested").write_text(requested)
-        for name in ("fullconenat-sonic", "kmod-usb-xhci-hcd", "audio-support"):
+        for name in ("fullconenat-sonic", "luci-app-fullconenat-sonic", "kmod-usb-xhci-hcd", "audio-support"):
             with self.subTest(package=name):
                 self.config.write_text(requested.replace(f"CONFIG_PACKAGE_{name}=y\n", ""))
                 with self.assertRaisesRegex(ValueError, name):

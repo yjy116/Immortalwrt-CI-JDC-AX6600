@@ -218,6 +218,12 @@ jobs:
           timeout 60s bash "$GITHUB_WORKSPACE/tests/test_owrt_profile.sh"
           python3 "$GITHUB_WORKSPACE/Scripts/owrt.py" verify "$WRT_DIR"
 
+      - name: 核验并补齐 SONiC Fullcone 上游修复
+        if: inputs.WRT_REPO == 'https://github.com/VIKINGYFY/immortalwrt.git' && inputs.WRT_BRANCH == 'owrt'
+        run: |
+          timeout 60s python3 "$GITHUB_WORKSPACE/tests/test_owrt_fullcone.py"
+          python3 "$GITHUB_WORKSPACE/Scripts/owrt_fullcone.py" "$WRT_DIR"
+
       - name: 安装 MiniUPnP 上游修复钩子
         run: |
           python3 "$GITHUB_WORKSPACE/Scripts/miniupnpd/install.py" "$WRT_DIR/feeds/packages/net/miniupnpd"
@@ -298,6 +304,7 @@ jobs:
 
           if [[ $WRT_TEST != 'true' ]]; then
             if [[ "$WRT_REPO" == 'https://github.com/VIKINGYFY/immortalwrt.git' && "$WRT_BRANCH" == 'owrt' ]]; then
+              cp ./FULLCONE-SOURCE.json ./upload/FULLCONE-SOURCE.json
               mapfile -t manifests < <(find ./bin/targets/ -type f -name '*.manifest')
               test "${#manifests[@]}" -gt 0
               for manifest in "${manifests[@]}"; do

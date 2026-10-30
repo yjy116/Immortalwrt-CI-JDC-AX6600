@@ -61,6 +61,8 @@ def adapt_packages(config):
         if not symbol or symbol[1] not in replacements:
             lines.append(line)
     values = {symbol: True for symbol in replacements.values()}
+    if "CONFIG_PACKAGE_fullconenat-sonic" in requested | values.keys():
+        values["CONFIG_PACKAGE_luci-app-fullconenat-sonic"] = True
     for old, new in replacements.items():
         print(f"OWRT package migration: {old} -> {new}")
     if requested & AUDIO_PACKAGES:
