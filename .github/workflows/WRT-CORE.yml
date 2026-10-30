@@ -67,7 +67,8 @@ env:
 jobs:
   core:
     name: ${{inputs.WRT_SOURCE}}
-    runs-on: ubuntu-latest
+    # Match the dependency bootstrap's supported noble toolchain.
+    runs-on: ubuntu-24.04
     steps:
       - name: Install BC
         env:
@@ -214,6 +215,7 @@ jobs:
         if: inputs.WRT_REPO == 'https://github.com/VIKINGYFY/immortalwrt.git' && inputs.WRT_BRANCH == 'owrt'
         run: |
           timeout 60s python3 "$GITHUB_WORKSPACE/tests/test_owrt_migration.py"
+          timeout 60s bash "$GITHUB_WORKSPACE/tests/test_owrt_profile.sh"
           python3 "$GITHUB_WORKSPACE/Scripts/owrt.py" verify "$WRT_DIR"
 
       - name: 安装 MiniUPnP 上游修复钩子
