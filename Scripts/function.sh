@@ -1,5 +1,9 @@
 #!/bin/bash
 
+function uses_owrt_ppe() {
+  [[ "${WRT_REPO%.git}" == "https://github.com/VIKINGYFY/immortalwrt" && "$WRT_BRANCH" == "owrt" ]]
+}
+
 function cat_kernel_config() {
   if [ -f $1 ]; then
     cat >> $1 <<EOF
@@ -141,21 +145,26 @@ EOF
 function generate_config() {
   config_file=".config"
   #如配置文件已存在
-  cat $GITHUB_WORKSPACE/Config/${WRT_CONFIG}.txt $GITHUB_WORKSPACE/Config/GENERAL.txt  > $config_file
+  local profile_dir="$GITHUB_WORKSPACE/Config"
+  if uses_owrt_ppe; then
+    profile_dir="$profile_dir/OWRT"
+  fi
+  cat "$profile_dir/${WRT_CONFIG}.txt" "$GITHUB_WORKSPACE/Config/GENERAL.txt" > "$config_file" || return 1
   local target=$(echo $WRT_ARCH | cut -d'_' -f2)
 
-  #删除wifi依赖
-  if [[ "$WRT_CONFIG" == *"NOWIFI"* ]]; then
-    remove_wifi $target
-  fi
-
-  set_nss_driver $config_file
   #增加ebpf
   cat_ebpf_config $config_file
-  enable_skb_recycler $config_file
-  set_kernel_size
-  #增加内核选项
-  cat_kernel_config "target/linux/qualcommax/${target}/config-default"
+  if uses_owrt_ppe; then
+    python3 "$GITHUB_WORKSPACE/Scripts/owrt.py" prepare "$PWD" --profile "$WRT_CONFIG" || return 1
+  else
+    if [[ "$WRT_CONFIG" == *"NOWIFI"* ]]; then
+      remove_wifi $target
+    fi
+    set_nss_driver $config_file
+    enable_skb_recycler $config_file
+    set_kernel_size
+    cat_kernel_config "target/linux/qualcommax/${target}/config-default"
+  fi
 }
 
 

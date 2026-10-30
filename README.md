@@ -41,8 +41,21 @@ Config——自定义配置
 - luci-app-mini-diskmanager
 - honk / luci-app-honk（内置 Doona）
 
-源码构建时从 `VIKINGYFY/immortalwrt` 的 `main` 分支实时拉取，因此每次新构建都会使用当时的最新源码提交。
+`QCA-6.18-VIKINGYFY` 从 `VIKINGYFY/immortalwrt` 的 `owrt` 分支实时拉取，每次新构建使用当时的最新源码提交。编译仓库自身仍在 `main` 分支维护；两者不是同一个分支。
 已选插件优先跟随 ImmortalWrt feeds、VIKINGYFY/OpenWRT-CI 和项目基板维护的当前来源；设备无关插件不会盲目同步。
+
+## OWRT PPE + NSS 迁移
+
+2026-10-30 起，6.18 工作流采用 `Config/OWRT/` 的精简设备选择，以上游 `owrt` 的内核基础配置、PPE/EDMA 驱动、NSS 固件、无线固件、内存预留及启动方式为准。`Config/GENERAL.txt` 的现有插件和插件选项不删减，DAE/DAED/Honk 的已核验来源与服务互斥修复不变。原配置文件继续供其他旧工作流使用，不混入本次构建。
+
+- 有线数据通路跟随上游 PPE/EDMA；WIFI 版使用 `ATH11K_NSS_WIFI` 和 `kmod-nss-wifi-drv`，QCN9074 固件由上游设备定义选择。NOWIFI 版去掉无线默认包，保留独立 NSS 驱动，不套用旧 `main` 的 Q6 内存缩减和 SKB recycler 强制选项。
+- 保留 `luci-app-sqm`，后端由旧 `sqm-scripts-nss` 改为 feeds 的 `sqm-scripts`，加入上游 `qca-ppe-qos` 与对应 LuCI 界面。旧 NSS qdisc/crypto/ECM 驱动不与新架构混用；这不代表新驱动提供旧驱动全部硬件加速能力。当前 feeds 的 SQM 是否含 `hw_ppe.qos` / `ppe_cake.qos` 必须以实际文件为准，不能仅凭 PPE QoS 界面宣称硬件 CAKE 可用。
+- 明确保留的定制例外：现有全部插件及依赖、eBPF/BTF 必要配置、LAN/SSID/现有密码、LED 配置迁移、MiniUPnP/LuCI 修复、已选京东云设备的 12 MiB Kernel。除此以外，不追加旧分支的内核调优或内存配置。
+- `defconfig` 后逐项核验请求的软件包及插件子选项；固件打包时核验 manifest，发现丢包明确失败。缓存按源码仓库和分支隔离，staging 额外按源码提交隔离。
+
+从旧 NSS 固件升级时，应备份网络、无线、代理和 SQM 配置。新分支采用不同的网络数据通路，不能假设旧 `ethX` 接口、SQM 的 `nss*.qos` 脚本或整份网络备份可原样恢复；先核对新固件的接口和可用队列脚本，再恢复业务设置。12 MiB 镜像只适用于已完成对应大分区修改的设备。本仓库不会自动修改分区、刷机或重启路由器。
+
+编译与离线检查不能代替实机 WAN/LAN、Wi-Fi、PPPoE/VLAN、UPnP 和透明代理/eBPF 与硬件卸载交互验证；迁移版未完成实测前保留上一版固件作为回退依据。
 
 USB 打印保留 `luci-app-usb-printer`、`p910nd` 和 `kmod-usb-printer`。上游现在要求显式选择 `printer-support`（打印设备组及热插拔规则），本仓库已补齐；构建会在 `defconfig` 后核验整条依赖，避免驱动及界面被静默取消选择。实际 USB 打印仍需连接打印机验证。
 

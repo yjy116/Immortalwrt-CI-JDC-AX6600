@@ -165,7 +165,6 @@ jobs:
           key: ccache-${{ env.WRT_ARCH }}-${{ hashFiles('**/repo_flag') }}-${{ env.WRT_DATE }}
           restore-keys: |
             ccache-${{ env.WRT_ARCH }}-${{ hashFiles('**/repo_flag') }}-
-            ccache-${{ env.WRT_ARCH }}-
 
       - name: Cache Staging Dependencies
         uses: actions/cache@v5
@@ -204,11 +203,18 @@ jobs:
           . $GITHUB_WORKSPACE/Scripts/function.sh
           cd "$WRT_DIR"
           
-          generate_config && cat .config
+          generate_config
           
           $GITHUB_WORKSPACE/Scripts/Settings.sh
 
+          cp .config .config.requested
           make defconfig -j$(nproc) && make clean -j$(nproc)
+
+      - name: 核验 OWRT 迁移与全部插件选择
+        if: inputs.WRT_REPO == 'https://github.com/VIKINGYFY/immortalwrt.git' && inputs.WRT_BRANCH == 'owrt'
+        run: |
+          timeout 60s python3 "$GITHUB_WORKSPACE/tests/test_owrt_migration.py"
+          python3 "$GITHUB_WORKSPACE/Scripts/owrt.py" verify "$WRT_DIR"
 
       - name: 安装 MiniUPnP 上游修复钩子
         run: |
@@ -289,6 +295,13 @@ jobs:
           cp ./LUCI-UPNP-SOURCE.json ./upload/LUCI-UPNP-SOURCE.json
 
           if [[ $WRT_TEST != 'true' ]]; then
+            if [[ "$WRT_REPO" == 'https://github.com/VIKINGYFY/immortalwrt.git' && "$WRT_BRANCH" == 'owrt' ]]; then
+              mapfile -t manifests < <(find ./bin/targets/ -type f -name '*.manifest')
+              test "${#manifests[@]}" -gt 0
+              for manifest in "${manifests[@]}"; do
+                python3 "$GITHUB_WORKSPACE/Scripts/owrt.py" manifest "$PWD" --manifest "$manifest"
+              done
+            fi
             test -s ./miniupnpd-nftables-backports.json
             cp ./miniupnpd-nftables-backports.json ./upload/MINIUPNPD-SOURCE.json
             echo "WRT_KVER=$(find ./bin/targets/ -type f -name "*.manifest" -exec grep -oP '^kernel - \K[\d\.]+' {} \;)" >> $GITHUB_ENV
