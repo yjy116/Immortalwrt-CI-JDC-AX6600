@@ -16,6 +16,9 @@ WIFI_PACKAGE = re.compile(
     r"wifi-scripts|wireless-regdb|iw|iwinfo)")
 PACKAGES = ("kmod-nss-wifi-drv", "nss-firmware", "luci-app-sqm", "sqm-scripts",
             "qca-ppe-qos", "luci-app-qca-ppe-qos", "tc-full", "miniupnpd-nftables")
+PACKAGE_REPLACEMENTS = {"kmod-nft-fullcone": "fullconenat-sonic",
+                        "kmod-usb-xhci": "kmod-usb-xhci-hcd"}
+AUDIO_PACKAGES = {"CONFIG_PACKAGE_kmod-sound-core", "CONFIG_PACKAGE_kmod-usb-audio"}
 BPF_KERNEL = ("BPF", "BPF_SYSCALL", "BPF_JIT", "CGROUPS", "KPROBES",
               "NET_INGRESS", "NET_EGRESS", "NET_CLS_ACT", "BPF_STREAM_PARSER",
               "DEBUG_INFO", "DEBUG_INFO_BTF", "KPROBE_EVENTS", "BPF_EVENTS")
@@ -45,6 +48,25 @@ def replace_options(config, values):
     for key, enabled in values.items():
         lines.append(f"{key}=y" if enabled else f"# {key} is not set")
     return "\n".join(lines) + "\n"
+
+
+def adapt_packages(config):
+    requested = selected(config)
+    replacements = {f"CONFIG_PACKAGE_{old}": f"CONFIG_PACKAGE_{new}"
+                    for old, new in PACKAGE_REPLACEMENTS.items()
+                    if f"CONFIG_PACKAGE_{old}" in requested}
+    lines = []
+    for line in config.splitlines():
+        symbol = re.match(r"^(?:# )?(CONFIG_[^=\s]+)", line)
+        if not symbol or symbol[1] not in replacements:
+            lines.append(line)
+    values = {symbol: True for symbol in replacements.values()}
+    for old, new in replacements.items():
+        print(f"OWRT package migration: {old} -> {new}")
+    if requested & AUDIO_PACKAGES:
+        values["CONFIG_PACKAGE_audio-support"] = True
+        print("OWRT audio dependency: CONFIG_PACKAGE_audio-support=y")
+    return replace_options("\n".join(lines), values)
 
 
 def set_kernel_layout(root, config):
@@ -85,6 +107,7 @@ def prepare(root, profile):
         raise ValueError("OWRT IPQ60xx target must provide the PPE/EDMA data path")
     config_path = root / ".config"
     config = "\n".join(line for line in read(config_path).splitlines() if not LEGACY_OPTION.match(line))
+    config = adapt_packages(config)
     set_kernel_layout(root, config)
     wifi = profile == "IPQ60XX-WIFI"
     values = {f"CONFIG_PACKAGE_{name}": True for name in PACKAGES}

@@ -58,6 +58,56 @@ class MigrationTests(unittest.TestCase):
         self.assertEqual('#include "ipq6018.dtsi"\n', (self.target / "dts/device.dts").read_text())
         self.assertTrue((self.root / "package/qca-nss/nss-wifi-drv/Makefile").is_file())
 
+    def test_upstream_replacements_preserve_fullcone_usb_and_audio(self):
+        self.config.write_text(self.config.read_text() +
+            "CONFIG_PACKAGE_kmod-nft-fullcone=y\nCONFIG_PACKAGE_kmod-usb-xhci=y\n"
+            "CONFIG_PACKAGE_kmod-usb3=y\nCONFIG_PACKAGE_kmod-sound-core=y\n"
+            "CONFIG_PACKAGE_kmod-usb-audio=y\n# CONFIG_PACKAGE_audio-support is not set\n"
+            "# CONFIG_PACKAGE_fullconenat-sonic is not set\n")
+        original = self.config.read_text()
+        for profile in ("IPQ60XX-WIFI", "IPQ60XX-NOWIFI"):
+            with self.subTest(profile=profile):
+                self.config.write_text(original)
+                owrt.prepare(self.root, profile)
+                config = self.config.read_text()
+                for name in ("fullconenat-sonic", "kmod-usb-xhci-hcd", "kmod-usb3",
+                             "kmod-sound-core", "kmod-usb-audio", "audio-support"):
+                    self.assertIn(f"CONFIG_PACKAGE_{name}=y\n", config)
+                self.assertNotIn("CONFIG_PACKAGE_kmod-nft-fullcone", config)
+                self.assertNotIn("CONFIG_PACKAGE_kmod-usb-xhci=", config)
+                owrt.prepare(self.root, profile)
+                self.assertEqual(config, self.config.read_text())
+
+    def test_audio_gate_is_added_for_either_requested_audio_package(self):
+        original = self.config.read_text()
+        for name in ("kmod-sound-core", "kmod-usb-audio"):
+            with self.subTest(package=name):
+                self.config.write_text(original + f"CONFIG_PACKAGE_{name}=y\n")
+                owrt.prepare(self.root, "IPQ60XX-WIFI")
+                self.assertIn("CONFIG_PACKAGE_audio-support=y\n", self.config.read_text())
+
+    def test_unrequested_replacements_and_audio_are_not_enabled(self):
+        self.config.write_text(self.config.read_text() +
+            "# CONFIG_PACKAGE_kmod-nft-fullcone is not set\n"
+            "# CONFIG_PACKAGE_kmod-usb-xhci is not set\n"
+            "# CONFIG_PACKAGE_kmod-usb-audio is not set\n")
+        owrt.prepare(self.root, "IPQ60XX-WIFI")
+        for name in ("fullconenat-sonic", "kmod-usb-xhci-hcd", "audio-support"):
+            self.assertNotIn(f"CONFIG_PACKAGE_{name}=y", self.config.read_text())
+
+    def test_replacement_or_audio_gate_loss_still_fails_verification(self):
+        self.config.write_text(self.config.read_text() +
+            "CONFIG_PACKAGE_kmod-nft-fullcone=y\nCONFIG_PACKAGE_kmod-usb-xhci=y\n"
+            "CONFIG_PACKAGE_kmod-usb-audio=y\n")
+        owrt.prepare(self.root, "IPQ60XX-WIFI")
+        requested = self.config.read_text()
+        (self.root / ".config.requested").write_text(requested)
+        for name in ("fullconenat-sonic", "kmod-usb-xhci-hcd", "audio-support"):
+            with self.subTest(package=name):
+                self.config.write_text(requested.replace(f"CONFIG_PACKAGE_{name}=y\n", ""))
+                with self.assertRaisesRegex(ValueError, name):
+                    owrt.verify_packages(self.root)
+
     def test_kernel_layout_is_scoped_and_idempotent(self):
         owrt.prepare(self.root, "IPQ60XX-WIFI")
         first = (self.target / "image/ipq60xx.mk").read_text()

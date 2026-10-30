@@ -50,6 +50,7 @@ Config——自定义配置
 
 - 有线数据通路跟随上游 PPE/EDMA；WIFI 版使用 `ATH11K_NSS_WIFI` 和 `kmod-nss-wifi-drv`，QCN9074 固件由上游设备定义选择。NOWIFI 版去掉无线默认包，保留独立 NSS 驱动，不套用旧 `main` 的 Q6 内存缩减和 SKB recycler 强制选项。
 - 保留 `luci-app-sqm`，后端由旧 `sqm-scripts-nss` 改为 feeds 的 `sqm-scripts`，加入上游 `qca-ppe-qos` 与对应 LuCI 界面。旧 NSS qdisc/crypto/ECM 驱动不与新架构混用；这不代表新驱动提供旧驱动全部硬件加速能力。当前 feeds 的 SQM 是否含 `hw_ppe.qos` / `ppe_cake.qos` 必须以实际文件为准，不能仅凭 PPE QoS 界面宣称硬件 CAKE 可用。
+- 原插件选择在生成 OWRT 配置时按上游包定义适配：`kmod-nft-fullcone` 对应内核集成的 `fullconenat-sonic`，`kmod-usb-xhci` 对应 `kmod-usb-xhci-hcd`；保留 USB 3.0、`kmod-sound-core` 和 `kmod-usb-audio`，并为所选音频包补齐 `audio-support` 硬件前置条件。旧 Fullcone 模块与新方案冲突，不再混装；这些转换不修改其他工作流使用的 `Config/GENERAL.txt`。替代包及音频依赖同样必须通过 defconfig 和固件 manifest 完整性核验，不能静默丢失。
 - 明确保留的定制例外：现有全部插件及依赖、eBPF/BTF 必要配置、LAN/SSID/现有密码、LED 配置迁移、MiniUPnP/LuCI 修复、已选京东云设备的 12 MiB Kernel。除此以外，不追加旧分支的内核调优或内存配置。
 - `defconfig` 后逐项核验请求的软件包及插件子选项；固件打包时核验 manifest，发现丢包明确失败。缓存按源码仓库和分支隔离，staging 额外按源码提交隔离。
 
