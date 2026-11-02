@@ -211,6 +211,14 @@ jobs:
           cp .config .config.requested
           make defconfig -j$(nproc) && make clean -j$(nproc)
 
+      - name: 核验新增插件默认值和主题
+        run: |
+          timeout 60s python3 "$GITHUB_WORKSPACE/tests/test_addon_defaults.py"
+          timeout 60s bash "$GITHUB_WORKSPACE/tests/test_vantage_defaults.sh"
+          timeout 60s bash "$GITHUB_WORKSPACE/tests/test_upstream_package_alignment.sh"
+          cd "$WRT_DIR/package/luci-theme-vantage"
+          timeout 60s node --test tests/package.test.js tests/theme.test.js tests/acl.test.js
+
       - name: 核验 OWRT 迁移与全部插件选择
         if: inputs.WRT_REPO == 'https://github.com/VIKINGYFY/immortalwrt.git' && inputs.WRT_BRANCH == 'owrt'
         run: |
@@ -224,19 +232,22 @@ jobs:
           timeout 60s python3 "$GITHUB_WORKSPACE/tests/test_owrt_fullcone.py"
           python3 "$GITHUB_WORKSPACE/Scripts/owrt_fullcone.py" "$WRT_DIR"
 
-      - name: 安装 MiniUPnP 上游修复钩子
+      - name: 核验上游 UPnP JSON 界面和配置租约迁移
         run: |
-          python3 "$GITHUB_WORKSPACE/Scripts/miniupnpd/install.py" "$WRT_DIR/feeds/packages/net/miniupnpd"
-          grep -Fxq 'CONFIG_PACKAGE_miniupnpd-nftables=y' "$WRT_DIR/.config"
-
-      - name: 修复并核验 LuCI 端口映射显示
-        run: |
-          source="$WRT_DIR/feeds/luci/applications/luci-app-upnp/root/usr/share/rpcd/ucode/luci.upnp"
-          python3 "$GITHUB_WORKSPACE/Scripts/luci_upnp/install.py" "$source" --receipt "$WRT_DIR/LUCI-UPNP-SOURCE.json"
-          node "$GITHUB_WORKSPACE/Scripts/luci_upnp/check_parser.cjs" "$source" --extract > "$RUNNER_TEMP/luci-upnp-reader.uc"
-          timeout 60s "$LUCI_UPNP_UCODE" -L "$LUCI_UPNP_LIB" "$GITHUB_WORKSPACE/tests/test_luci_upnp.uc" \
-            "$RUNNER_TEMP/luci-upnp-reader.uc" "$GITHUB_WORKSPACE/Scripts/luci_upnp/cases.json"
+          timeout 60s python3 "$GITHUB_WORKSPACE/tests/test_upnp_harness.py"
+          python3 "$GITHUB_WORKSPACE/Scripts/luci_upnp/upstream.py" "$WRT_DIR/package/packages" \
+            --ucode "$LUCI_UPNP_UCODE" --library "$LUCI_UPNP_LIB" --receipt "$WRT_DIR/LUCI-UPNP-SOURCE.json"
           grep -Fxq 'CONFIG_PACKAGE_luci-app-upnp=y' "$WRT_DIR/.config"
+
+      - name: 安装 MiniUPnP 源码感知修复核验钩子
+        run: |
+          timeout 60s python3 "$GITHUB_WORKSPACE/tests/test_upnp_layout.py"
+          python3 "$GITHUB_WORKSPACE/Scripts/miniupnpd/install.py" "$WRT_DIR/package/packages/miniupnpd"
+          grep -Fxq 'CONFIG_PACKAGE_miniupnpd-nftables=y' "$WRT_DIR/.config"
+          if grep -Fxq 'CONFIG_PACKAGE_miniupnpd-iptables=y' "$WRT_DIR/.config"; then
+            echo 'ERROR: incompatible UPnP backends selected' >&2
+            exit 1
+          fi
 
       - name: 校验 Honk、DAE/DAED 与 USB 打印插件
         run: |

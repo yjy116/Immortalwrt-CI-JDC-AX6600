@@ -36,6 +36,9 @@ if grep -Fq 'CONFIG_PACKAGE_luci-app-wolplus=y' "$GENERAL"; then
 fi
 
 for package in luci-app-gecoosac luci-app-mini-diskmanager \
+  luci-app-vantage luci-theme-vantage luci-theme-argon luci-theme-aurora \
+  luci-app-natmapt natmapt stuntman-client luci-app-netspeedtest \
+  luci-app-netwizard luci-app-timecontrol luci-app-netmonitor \
   printer-support kmod-usb-printer p910nd luci-app-usb-printer
 do
 	grep -Fq "CONFIG_PACKAGE_${package}=y" "$GENERAL" || {
@@ -43,6 +46,10 @@ do
 		exit 1
 	}
 done
+
+grep -Fq 'WRT_THEME: vantage' "$ROOT_DIR/.github/workflows/QCA-6.18-VIKINGYFY.yml"
+grep -Fq 'UPDATE_PACKAGE "vantage" "anothaDev/luci-theme-vantage" "main"' "$PACKAGES"
+grep -Fq 'luci-app-wolultra miniupnpd luci-app-upnp" || exit 1' "$PACKAGES"
 
 grep -Fq 'UPDATE_PACKAGE "diskman" "sbwml/luci-app-diskman" "main"' "$PACKAGES" || {
 	echo "DiskMan source must follow the current VIKINGYFY CI override"

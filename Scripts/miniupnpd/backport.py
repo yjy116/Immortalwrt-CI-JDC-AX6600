@@ -83,6 +83,7 @@ def prepare(options):
             if (scratch / name).read_bytes() != (options.source / name).read_bytes():
                 shutil.copyfile(scratch / name, options.source / name)
     report = {"version": options.version, "release": options.release,
+              "source_commit": options.source_commit, "archive_sha256": options.archive_sha256,
               "variant": options.variant, "fixes": state,
               "upstream_commits": {name: data[0] for name, data in PATCHES.items()},
               "patch_sha256": {name: data[1] for name, data in PATCHES.items()},
@@ -105,6 +106,8 @@ def main():
     parser.add_argument("--version", default="unknown")
     parser.add_argument("--release", default="unknown")
     parser.add_argument("--variant", default="unknown")
+    parser.add_argument("--source-commit", default="")
+    parser.add_argument("--archive-sha256", default="")
     parser.add_argument("--verify-only", action="store_true")
     options = parser.parse_args()
     if options.verify_only:

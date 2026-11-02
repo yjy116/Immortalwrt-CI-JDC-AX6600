@@ -44,6 +44,32 @@ Config——自定义配置
 `QCA-6.18-VIKINGYFY` 从 `VIKINGYFY/immortalwrt` 的 `owrt` 分支实时拉取，每次新构建使用当时的最新源码提交。编译仓库自身仍在 `main` 分支维护；两者不是同一个分支。
 已选插件优先跟随 ImmortalWrt feeds、VIKINGYFY/OpenWRT-CI 和项目基板维护的当前来源；设备无关插件不会盲目同步。
 
+## 上游插件补齐与 Vantage
+
+2026-11-02 对照 [VIKINGYFY/OpenWRT-CI](https://github.com/VIKINGYFY/OpenWRT-CI/tree/967e4c7728fba8e54c62066b5507aed015844588) 和 `owrt` 的 `17d1ac0c`，在保留原有插件的基础上补齐以下通用应用。构建继续跟随各自维护分支，不将本次核对提交冒充永久最新版本。
+
+| 应用 | 来源 | 集成方式 |
+| --- | --- | --- |
+| NATMapT / LuCI 界面、STUN 客户端 | `muink/openwrt-natmapt`、`muink/luci-app-natmapt`、`muink/openwrt-stuntman` 的 `master` | 补齐上游默认选择；保持全局关闭，只保留一个未启用模板，去掉上游示例映射、示例账号和通知配置。不会自动修改 qBittorrent。 |
+| 网络测速 | `sirpdboy/netspeedtest:main` | 同时包含 Homebox、Ookla 客户端；复用原有 `iperf3`，不混装互斥的 `iperf3-ssl`。不自动开始测速或启动测速服务器。 |
+| 网络向导 | `sirpdboy/luci-app-netwizard:main` | 按上游逻辑开机跳过配置应用；仅在用户主动保存时修改网络。与原有 Router Tool 功能重叠，不要连续使用两个向导覆盖配置。 |
+| 上网时间控制 | `sirpdboy/luci-app-timecontrol:main` | 保持上游规则未启用；按需配置。硬件卸载与时间控制规则的实机交互尚未验证。 |
+| 网络质量监控 | `LianXia233/luci-app-netmonitor:main` | 固件默认关闭全局探测；保留上游目标配置，用户启用后才探测。 |
+| Vantage 主题与仪表盘 | [anothaDev/luci-theme-vantage:main](https://github.com/anothaDev/luci-theme-vantage) | 同时选择 `luci-theme-vantage` 和 `luci-app-vantage`，与上游 CI 来源一致；本次核对版本为 `1.0.12-r1`。 |
+
+`QCA-6.18-VIKINGYFY` 默认主题改为 Vantage，Argon、Aurora 等原有选择保留。首次进入这一主题版本时，末尾的 UCI defaults 脚本选用 Vantage，并在 LuCI 配置记录标记；之后手动切换主题不会在普通重启或保留配置升级时被重新覆盖。恢复旧备份可能带回旧主题和服务配置，不能保证旧配置跨版本兼容。
+
+本次不修改已有 `qca-ppe-qos` / `luci-app-qca-ppe-qos` 的选择或运行设置；源码和上游默认值仍随 `owrt` 自然更新。`luci-app-router-tool`、SONiC Fullcone、LED 等也已存在，不重复添加。MiniUPnP 与 LuCI UPnP 同时迁移到 VIKINGYFY 的整套维护包，详见下文；移除 feeds 中的同名提供者，避免混用新旧接口。
+
+未纳入的上游差异：
+
+- CHFS：当前包装允许 `PKG_HASH:=skip` 和 HTTP 下载回退，且带默认管理口令，暂不作为已验证插件加入；原 Samba4、磁盘管理、qBittorrent 保留。
+- 机型专用风扇、FM350/H5000M/MT5700 蜂窝模块控制、QModem-generic、TMI PoE：不对应 AX6600 当前硬件用途，不批量安装。
+- `ksmbd`、AHCI/NVMe 及工具、额外 EHCI、OpenVPN 内核卸载、IPv6 NAT：属于另一套文件共享或硬件/网络功能，不仅是 LuCI 插件。现有 Samba4、USB3/xHCI 与代理方案不替换。
+- Fluent、Footstrap、Shadcn：上游提供的其他可选主题，本次按用户指定使用 Vantage，不额外安装所有皮肤。
+
+“不恢复备份”只能减少历史配置冲突，不能证明所有服务同时启用兼容。新增插件通过构建中的依赖、defconfig 和 manifest 核验；代理转发、QoS/访问控制、测速及页面实际运行仍需新固件实机验证。项目不会自动刷机、连接路由器改配置或重启。
+
 ## OWRT PPE + NSS 迁移
 
 2026-10-30 起，6.18 工作流采用 `Config/OWRT/` 的精简设备选择，以上游 `owrt` 的内核基础配置、PPE/EDMA 驱动、NSS 固件、无线固件、内存预留及启动方式为准。`Config/GENERAL.txt` 的现有插件和插件选项不删减，DAE/DAED/Honk 的已核验来源与服务互斥修复不变。原配置文件继续供其他旧工作流使用，不混入本次构建。
@@ -84,14 +110,18 @@ Honk and bundled Doona are added alongside DAE/DAED, disabled by default. The fi
 
 ## MiniUPnP 上游修复与自动接续
 
-MiniUPnP 继续跟随 feeds 更新，不固定为 `2.3.11`，不替换 LuCI、启动脚本或用户的 UPnP 配置。构建时补齐以下官方修复：
+2026-11-02 起，`miniupnpd-nftables` 与 `luci-app-upnp` 整套跟随 [VIKINGYFY/packages:main](https://github.com/VIKINGYFY/packages)。本次核对提交为 `1d676e3edcb5838fcffcbfe53aa459908810f999`，核心包装 `20261101-r1` 使用官方 `miniupnp/miniupnp` 的 `d7b1860` 源码，LuCI 包为 `20261027-r7`。不冻结这些版本，构建记录当时实际版本与提交。
+
+新包原生已包含以下官方修复，仍通过源码感知钩子验证，后续上游变更不能静默丢失：
 
 - [2dcf639](https://github.com/miniupnp/miniupnp/commit/2dcf63959950dbb2c3f97b7bd63773d499749134)：启用 `ext_allow_private_ipv4` 时，WAN 断线后恢复为内网/CGNAT 地址，也能重新允许端口映射。
 - [a8de55a](https://github.com/miniupnp/miniupnp/commit/a8de55a0ae4829d59498667120d1e88933dc0f5d)：为 nftables `inet` 表的映射规则添加正确的 IPv4/IPv6 限定，同时包含其前置解析器重构 `320ebf5`。
 
-`Scripts/miniupnpd/install.py` 将钩子接入软件包的 `Prepare/Post`，在**解包和所有 feeds 补丁之后**检查实际源码。缺失时应用本仓库带 SHA-256 校验的官方补丁；上游已包含完整修复时记录 `already-present`，不重复打补丁，也不根据版本号猜测是否修复。冲突先在临时副本暴露，不把半套补丁写回源码。编译前再次核对修复及源码哈希，编译成功后生成来源记录。
+`Scripts/miniupnpd/install.py` 将钩子接入软件包的 `Prepare/Post`，在**解包和所有包内补丁之后**检查实际源码，支持新包的 `miniupnpd/` 子目录。缺失时应用本仓库带 SHA-256 校验的官方补丁；上游已包含完整修复时记录 `already-present`，不重复打补丁，也不根据版本号猜测是否修复。冲突先在临时副本暴露，不把半套补丁写回源码。编译前再次核对修复及源码哈希，编译成功后生成来源记录。
 
-每次完整构建的 Release 附带 `MINIUPNPD-SOURCE.json`，包含当次软件包版本、两项修复的应用状态、官方提交及补丁/源码 SHA-256。包版本号仍由上游维护，因此不能只看 `miniupnpd --version` 判断是否带本地修复；在线包升级也可能覆盖固件里的修复，需核对来源或通过本仓库重编译。
+每次完整构建的 Release 附带 `MINIUPNPD-SOURCE.json`，包含当次软件包版本、核心源提交、源码归档校验值、两项修复状态及补丁/源码 SHA-256。`LUCI-UPNP-SOURCE.json` 另记录整套包的维护提交、版本和文件哈希。不要单独用旧 feeds 的 LuCI 或核心覆盖新包；优先通过本仓库重编译成对更新。
+
+保留上游启动脚本、backend 标记、防火墙 include 和 UCI defaults 迁移：已有 `force_forwarding` 改名为 `ext_allow_private_ipv4`，已存在的新选项值优先保留；旧六字段租约补上空的 remote-host 字段，已有七字段租约不重复转换。`/etc/config/upnpd` 仍为 conffile，不主动改写用户映射权限、端口或内网接口。CI 使用隔离 UCI/进程测试桩执行真实迁移脚本，验证旧值、新值、混合租约、重复执行和错误退出；不是路由器实机迁移验收。
 
 以后上游发布包含这些修复的新版本，会自动识别并跳过。**无法保证任意未来重构都无需适配**：若实现结构已改变且不能确认修复，构建明确失败并指出位置，需要重新审查，绝不静默跳过或退回旧版。升级不改变现有插件、LAN/Wi-Fi、LED、NSS/eBPF 或 12 MiB Kernel 配置。
 
@@ -107,13 +137,13 @@ CI 每次自动执行以上测试。测试与编译成功不等于实机公网�
 
 映射在内核中生效而页面显示为空，也可能是 `/usr/share/rpcd/ucode/luci.upnp` 的解析问题。新版 nft 规则包含 `counter packets … bytes …`，并可能把旧的 `@nh,72,8` 协议表达式显示为 `ip protocol tcp/udp`，旧 LuCI 解析器会漏掉这些规则。
 
-本项目参考 [OpenWrt LuCI PR #9148](https://github.com/openwrt/luci/pull/9148) 的计数字段修复和 [PR #8415](https://github.com/openwrt/luci/pull/8415) 的协议格式适配，只修改 nft 状态读取的五行代码，兼容新旧格式及 TCP/UDP。**两项提案在 2026-10-21 核对时均未合并**；本仓库是经过回归验证的局部适配，不是宣称已经发布的官方修复，也不引入提案中的 UCI、权限或租约格式改版。
+现在使用 VIKINGYFY 的完整 JSON 状态读取实现，通过 `nft --json` 解析表达式，不再靠文本正则跳过计数器；同时适配新租约、token 删除接口、LuCI 页面和 ACL。旧的 `Scripts/luci_upnp/install.py` 不再用于实际固件，仅保留旧解析器作为历史回归对照。**截至 2026-11-02，OpenWrt LuCI PR #9148 已关闭但未合并，#8415 仍未合并**，不能把本次 VIKINGYFY 修复描述为 OpenWrt 官方 LuCI 已合入。
 
-构建时 `Scripts/luci_upnp/install.py` 先验证实际 feeds 解析器：已兼容则保持上游文件不变，已知旧实现才应用修复；未知实现或测试失败会明确报错，不覆盖整包、不锁定 LuCI 版本。Release 的 `LUCI-UPNP-SOURCE.json` 记录修复状态、参考来源与文件前后 SHA-256。在线升级 `luci-app-upnp` 可能覆盖固件修复，应核对新包或重新构建。
+构建时 `Scripts/luci_upnp/upstream.py` 用原生 ucode 执行实际包中的 JSON 读取、租约和状态合并逻辑，覆盖 TCP/UDP、raw/decoded/meta 协议表达式、counter、无效规则、命令失败及错误删除 token。测试只替换外部 I/O，不重写上游解析函数；未知源码布局或测试失败明确阻断构建，不静默退回旧解析器。
 
-本地基础检查：`python tests/test_luci_upnp.py`（需要 Node.js）。Linux 原生 ucode 回归：`bash tests/run_luci_upnp_tests.sh`（需要 Git、CMake、C 编译器、libjson-c-dev、Node.js、Python 3）；各测试命令限制为 60 秒。CI 对实际 feeds 文件再次执行原生 ucode 测试。所有测试使用离线规则输入，不创建真实端口映射，不更改代理或网络服务；原生测试只固定测试解释器版本，不固定固件的软件包版本。
+本地基础检查：`python tests/test_upnp_layout.py`、`python tests/test_upnp_harness.py`；迁移回归：`bash tests/test_upnp_migration.sh <上游miniupnpd目录>/files/miniupnpd.defaults.migration`。CI 先用 `tests/run_luci_upnp_tests.sh` 构建测试解释器并验证历史故障对照，再执行新的整套包核验。每个回归测试命令限时 60 秒，输入均为离线样本，不创建真实端口映射，不更改代理或网络服务；测试解释器版本不限制固件的软件包版本。
 
-实机验收应先记录已有映射，再用未占用的高端口建立短时 TCP/UDP 测试映射，对照内核规则、`luci.upnp.get_status` 与网页，最后通过 UPnP 删除自己创建的测试映射并回查。不要用页面的整服务重启路径清理测试，不删除业务映射。离线回归通过不等于已验证实机页面、qBittorrent 自动申请或公网可达。
+上游页面的删除操作会停启 MiniUPnP 服务并从租约中移除对应条目，不能当作完全无中断的删除。实机验收应先记录已有映射，再用未占用的高端口建立短时 TCP/UDP 测试映射，对照内核规则、`luci.upnp.get_status` 与网页，最后通过 UPnP 协议删除自己创建的测试映射并回查，不删除业务映射。离线回归通过不等于已验证实机页面、qBittorrent 自动申请或公网可达。
 
 ## 雅典娜 LED 屏幕配置修复
 

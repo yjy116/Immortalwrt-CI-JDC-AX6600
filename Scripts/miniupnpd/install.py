@@ -10,6 +10,9 @@ INCLUDE = "include $(CURDIR)/miniupnpd-backports/hooks.mk"
 def install(package):
     makefile = package / "Makefile"
     text = makefile.read_text(encoding="utf-8")
+    layout = re.search(r"^CONFIGURE_PATH\s*:?=\s*(.+)$", text, re.M)
+    if layout and layout[1].strip() not in (".", "miniupnpd"):
+        raise ValueError("Unknown MiniUPnP source layout; review upstream recipe")
     target = re.search(r"^\$\(eval \$\(call BuildPackage,miniupnpd-[^)]+\)\)", text, re.M)
     if not target:
         raise ValueError("MiniUPnP BuildPackage entry not found; review upstream recipe")

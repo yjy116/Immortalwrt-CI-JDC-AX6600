@@ -3,6 +3,10 @@
 # Install the LED repair into the firmware overlay for first boot/sysupgrade.
 install -Dm0755 "$GITHUB_WORKSPACE/files/etc/uci-defaults/99-athena-led-config-migration" \
 	./files/etc/uci-defaults/99-athena-led-config-migration || exit 1
+if [ "$WRT_THEME" = vantage ]; then
+	install -Dm0755 "$GITHUB_WORKSPACE/files/etc/uci-defaults/zzzz-vantage-theme" \
+		./files/etc/uci-defaults/zzzz-vantage-theme || exit 1
+fi
 #移除luci-app-attendedsysupgrade
 sed -i "/attendedsysupgrade/d" $(find ./feeds/luci/collections/ -type f -name "Makefile")
 #修改默认主题
@@ -28,6 +32,11 @@ elif [ -f "$WIFI_UC" ]; then
 	sed -i "s/country='.*'/country='CN'/g" $WIFI_UC
 	#修改WIFI加密
 	sed -i "s/encryption='.*'/encryption='psk2+ccmp'/g" $WIFI_UC
+fi
+
+ROUTER_TOOL="./package/emortal/luci-app-router-tool/root/etc/config/router-tool"
+if [ -f "$ROUTER_TOOL" ]; then
+	sed -i "s/ssid '.*'/ssid '$WRT_SSID'/g; s/key '.*'/key '$WRT_WORD'/g" "$ROUTER_TOOL"
 fi
 
 CFG_FILE="./package/base-files/files/bin/config_generate"

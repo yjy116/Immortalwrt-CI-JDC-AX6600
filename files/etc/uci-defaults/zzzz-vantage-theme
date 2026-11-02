@@ -1,0 +1,11 @@
+#!/bin/sh
+set -eu
+
+# Apply this image default once, retaining subsequent administrator choices.
+if [ "$(uci -q get luci.main.ci_default_theme)" = vantage ]; then
+  exit 0
+fi
+uci set luci.main.mediaurlbase=/luci-static/vantage
+uci set luci.main.ci_default_theme=vantage
+uci commit luci
+exit 0

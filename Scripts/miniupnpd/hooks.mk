@@ -1,15 +1,16 @@
 # Run after Build/Prepare/Default has applied all feed patches.
+MINIUPNPD_FIX_SOURCE = $(PKG_BUILD_DIR)/$(CONFIGURE_PATH)
 define Miniupnpd/ApplyOfficialFixes
-	python3 "$(CURDIR)/miniupnpd-backports/backport.py" "$(PKG_BUILD_DIR)" --version "$(PKG_VERSION)" --release "$(PKG_RELEASE)" --variant "$(BUILD_VARIANT)"
+	python3 "$(CURDIR)/miniupnpd-backports/backport.py" "$(MINIUPNPD_FIX_SOURCE)" --version "$(PKG_VERSION)" --release "$(PKG_RELEASE)" --variant "$(BUILD_VARIANT)" --source-commit "$(PKG_SOURCE_VERSION)" --archive-sha256 "$(PKG_HASH)"
 endef
 Hooks/Prepare/Post += Miniupnpd/ApplyOfficialFixes
 
 define Miniupnpd/VerifyOfficialFixes
-	python3 "$(CURDIR)/miniupnpd-backports/backport.py" "$(PKG_BUILD_DIR)" --verify-only
+	python3 "$(CURDIR)/miniupnpd-backports/backport.py" "$(MINIUPNPD_FIX_SOURCE)" --verify-only
 endef
 Hooks/Compile/Pre += Miniupnpd/VerifyOfficialFixes
 
 define Miniupnpd/PublishSourceReceipt
-	$(CP) "$(PKG_BUILD_DIR)/miniupnpd-backports.json" "$(TOPDIR)/miniupnpd-$(BUILD_VARIANT)-backports.json"
+	$(CP) "$(MINIUPNPD_FIX_SOURCE)/miniupnpd-backports.json" "$(TOPDIR)/miniupnpd-$(BUILD_VARIANT)-backports.json"
 endef
 Hooks/Compile/Post += Miniupnpd/PublishSourceReceipt
