@@ -214,6 +214,9 @@ jobs:
       - name: 核验新增插件默认值和主题
         run: |
           timeout 60s python3 "$GITHUB_WORKSPACE/tests/test_addon_defaults.py"
+          timeout 60s python3 "$GITHUB_WORKSPACE/tests/test_netspeedtest_check.py"
+          python3 "$GITHUB_WORKSPACE/Scripts/netspeedtest_check.py" "$WRT_DIR"
+          timeout 60s python3 -S "$WRT_DIR/package/netspeedtest/luci-app-netspeedtest/root/usr/bin/speedtest" --version
           timeout 60s bash "$GITHUB_WORKSPACE/tests/test_vantage_defaults.sh"
           timeout 60s bash "$GITHUB_WORKSPACE/tests/test_upstream_package_alignment.sh"
           cd "$WRT_DIR/package/luci-theme-vantage"

@@ -45,6 +45,37 @@ class AddonDefaultsTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'iperf3'):
             addons.speedtest_dependencies('LUCI_DEPENDS:=+iperf3-ssl\n')
 
+    def test_speedtest_obsolete_python_dependencies_are_removed_without_losing_modules(self):
+        recipe = ('LUCI_DEPENDS:=+python3-light +python3-email +python3-pkg-resources '
+                  '+python3-urllib +python3-xml +python3-openssl +ookla-speedtest\n')
+        provider = ('$(eval $(call Py3BasePackage,python3-urllib, \\\n'
+                    '/usr/lib/python$(PYTHON3_VERSION)/email \\\n))\n')
+        result = addons.speedtest_python_dependencies(recipe, provider, 'import urllib.request\n')
+        self.assertNotIn('+python3-email', result)
+        self.assertNotIn('+python3-pkg-resources', result)
+        for package in ('python3-light', 'python3-urllib', 'python3-xml', 'python3-openssl', 'ookla-speedtest'):
+            self.assertIn('+' + package, result)
+        self.assertEqual(addons.speedtest_python_dependencies(result, provider, ''), result)
+
+    def test_speedtest_missing_email_provider_is_not_silently_ignored(self):
+        with self.assertRaisesRegex(ValueError, 'email'):
+            addons.speedtest_python_dependencies('LUCI_DEPENDS:=+python3-email +python3-urllib\n', '', '')
+
+    def test_speedtest_real_pkg_resources_usage_requires_review(self):
+        with self.assertRaisesRegex(ValueError, 'pkg_resources'):
+            addons.speedtest_python_dependencies('LUCI_DEPENDS:=+python3-pkg-resources\n', '',
+                                                 'from pkg_resources import get_distribution\n')
+
+    def test_speedtest_email_requires_selected_urllib_provider(self):
+        provider = ('$(eval $(call Py3BasePackage,python3-urllib, \\\n'
+                    '/usr/lib/python$(PYTHON3_VERSION)/email \\\n))\n')
+        with self.assertRaisesRegex(ValueError, 'email'):
+            addons.speedtest_python_dependencies('LUCI_DEPENDS:=+python3-email\n', provider, '')
+
+    def test_speedtest_already_fixed_upstream_remains_unchanged(self):
+        recipe = 'LUCI_DEPENDS:=+python3-urllib +python3-email-extra\n'
+        self.assertEqual(addons.speedtest_python_dependencies(recipe, '', ''), recipe)
+
 
 if __name__ == '__main__':
     unittest.main()

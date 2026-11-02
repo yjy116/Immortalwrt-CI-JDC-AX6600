@@ -42,15 +42,43 @@ def speedtest_dependencies(text):
     raise ValueError('Review changed netspeedtest iperf3 dependency')
 
 
+def speedtest_python_dependencies(text, urllib_provider, speedtest_source):
+    email = r'\+python3-email(?=\s|$)'
+    resources = r'\+python3-pkg-resources(?=\s|$)'
+    if re.search(email, text):
+        provider = re.search(
+            r'\$\(call Py3BasePackage,python3-urllib,(.*?)^\)\)',
+            urllib_provider, re.M | re.S)
+        if (not re.search(r'\+python3-urllib(?=\s|$)', text) or not provider
+                or not re.search(r'^\s*/usr/lib/python\$\(PYTHON3_VERSION\)/email(?:\s|$)',
+                                 provider[1], re.M)):
+            raise ValueError('Review netspeedtest email module provider')
+        text = re.sub(email, '', text)
+    if re.search(resources, text):
+        if 'pkg_resources' in speedtest_source:
+            raise ValueError('Review netspeedtest pkg_resources runtime dependency')
+        text = re.sub(resources, '', text)
+    return text
+
+
+def speedtest_recipe(root):
+    package = root / 'netspeedtest/luci-app-netspeedtest'
+    recipe = speedtest_dependencies((package / 'Makefile').read_text(encoding='utf-8'))
+    provider = root.parent / 'feeds/packages/lang/python/python3/files/python3-package-urllib.mk'
+    urllib = provider.read_text(encoding='utf-8') if re.search(r'\+python3-email(?=\s|$)', recipe) else ''
+    source = (package / 'root/usr/bin/speedtest').read_text(encoding='utf-8')
+    return package / 'Makefile', speedtest_python_dependencies(recipe, urllib, source)
+
+
 def apply(root):
     changes = (
         ('luci-app-netmonitor/root/etc/config/netmonitor', monitor_defaults),
         ('openwrt-natmapt/files/natmap.config', natmap_defaults),
-        ('netspeedtest/luci-app-netspeedtest/Makefile', speedtest_dependencies),
     )
     # Validate every source before writing any of the adaptations.
     results = [(root / path, adapt((root / path).read_text(encoding='utf-8')))
                for path, adapt in changes]
+    results.append(speedtest_recipe(root))
     for path, text in results:
         path.write_text(text, encoding='utf-8', newline='\n')
         print(f'Optional addon adaptation: {path.relative_to(root)}')

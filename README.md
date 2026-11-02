@@ -51,7 +51,7 @@ Config——自定义配置
 | 应用 | 来源 | 集成方式 |
 | --- | --- | --- |
 | NATMapT / LuCI 界面、STUN 客户端 | `muink/openwrt-natmapt`、`muink/luci-app-natmapt`、`muink/openwrt-stuntman` 的 `master` | 补齐上游默认选择；保持全局关闭，只保留一个未启用模板，去掉上游示例映射、示例账号和通知配置。不会自动修改 qBittorrent。 |
-| 网络测速 | `sirpdboy/netspeedtest:main` | 同时包含 Homebox、Ookla 客户端；复用原有 `iperf3`，不混装互斥的 `iperf3-ssl`。不自动开始测速或启动测速服务器。 |
+| 网络测速 | `sirpdboy/netspeedtest:main` | 同时包含 Homebox、Ookla 客户端；复用原有 `iperf3`，不混装互斥的 `iperf3-ssl`。核实当前 `python3-urllib` 已提供 `email` 且实际测速脚本不使用 `pkg_resources` 后，移除两个过时的拆分包依赖；不固定旧 Python 版本。编译前检查依赖包存在且已选入镜像。不自动开始测速或启动测速服务器。 |
 | 网络向导 | `sirpdboy/luci-app-netwizard:main` | 按上游逻辑开机跳过配置应用；仅在用户主动保存时修改网络。与原有 Router Tool 功能重叠，不要连续使用两个向导覆盖配置。 |
 | 上网时间控制 | `sirpdboy/luci-app-timecontrol:main` | 保持上游规则未启用；按需配置。硬件卸载与时间控制规则的实机交互尚未验证。 |
 | 网络质量监控 | `LianXia233/luci-app-netmonitor:main` | 固件默认关闭全局探测；保留上游目标配置，用户启用后才探测。 |
