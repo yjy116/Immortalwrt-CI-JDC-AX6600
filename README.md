@@ -93,13 +93,15 @@ USB 打印保留 `luci-app-usb-printer`、`p910nd` 和 `kmod-usb-printer`。上�
 
 新增 [kenzok8/openwrt-honk](https://github.com/kenzok8/openwrt-honk) 的 `honk` 和 `luci-app-honk`，保留原有 DAE、DAED、daede 管理界面及其他插件。Doona 静态界面随 `luci-app-honk` 安装到 `/usr/share/doona`，不需要另装 `luci-app-doona`，也不额外启动面板服务。
 
-当前核验版本为 `2026.10.12-r1`，打包提交 `52ecdb1bb26e04be782bcb368973fd54d4a44af6`；核心来自 `Glassyiris/honk` 提交 `8b6778cefa12611492187ac2560f014452f0a64a`，Doona 为 `0.1.0-beta.20`、提交 `25fc26a7a17697c1c11a3b31f51940966ac86c2f`。
+自 2026-11-04 起，每次构建跟随维护源 `main` 的最新提交，不再固定历史版本。此次主机核验基线为 `2026.11.03-r1`、打包提交 `036d31fc9d0c30fca12501f22960529c7f6b97fd`；核心来自 `daeuniverse/honk` 提交 `77176ff8e8cc2b75385a7030dc376536c382574a`，Doona 为 `0.1.0-rc.5`、提交 `46e153cf405ce665983794cf297fb5cf6d38084c`。实际固件以该次 Release 的来源记录为准。
 
-构建采用上游已发布的静态 musl 核心（雅典娜使用 AArch64）和 Doona 静态资源，再由本仓库的 OpenWrt 工具链打包；**不是在本仓库重新编译 Rust 核心**。`Scripts/Honk.sh` 固定正式版本对应的 `source-38236606118` 资产，并校验三个生成文件的 SHA-256；核心和 Doona 归档继续由 OpenWrt 的 `PKG_HASH` 校验，不使用可变 `staging` 或跳过校验。每次 Release 附带 `HONK-SOURCE.txt`，记录提交、资源校验值和构建来源。后续跟进上游正式版本时需一起更新提交、来源 tag 和生成文件校验值，并复验两组固件，不单独替换核心二进制。
+构建采用维护源已发布的静态 musl 核心（雅典娜使用 AArch64）和 Doona 静态资源，再由本仓库的 OpenWrt 工具链打包；**不是在本仓库重新编译 Rust 核心**。QCA 工作流在矩阵开始前统一解析 DAEDE/Honk 的最新 `main` 提交，WIFI/NOWIFI 共用本次 SHA，构建中途不再追逐分支变动。`Scripts/Honk.sh` 使用该提交 Makefile 中的 `source-<run_id>` 和 SHA-256，不加载生成的 Makefile 覆盖、不使用可变 `staging` 或 `SKIP`。GitHub Release 的资产摘要必须与 Makefile 一致；来源 JSON 另行校验 SHA-256，并核对核心仓库、提交及架构。下载后再校验实际归档，检查静态 AArch64 核心和 Doona 页面及源码记录。
+
+每次 Release 的 `HONK-SOURCE.txt` 记录实际打包提交、组件 pins、版本、下载 URL/哈希、已适配文件哈希和预编译来源。跟随的是维护源已集成的组合，不是绕过维护者直接追核心开发分支；维护源缺少资产、校验不一致或本地兼容补丁冲突时明确失败，不退回旧版本。上游已移除独立开机开关，本仓库通过 `patches/honk/010-preserve-boot-opt-in.patch` 保留原开关、恢复配置和默认关闭行为，保存其他设置不会强制开启自启。自定义配置文件模式提供独立的自启保存命令，只修改启动偏好和启动链接，不改网络配置或重启服务。
 
 使用说明：
 
-1. 固件保持上游默认：Honk 未初始化、未启用、不开机自启，不会自动接管现有 DAE/DAED。
+1. 固件保持原有默认：Honk 未初始化、未启用、不开机自启，不会自动接管现有 DAE/DAED。
 2. 使用 Honk 前，在 daede 界面停止当前 DAE/DAED 后端并关闭其开机自启；其他透明代理也应先停止。Honk 启动检查会对正在运行的 DAE/DAED 等代理明确报冲突，不会替你自动停止它们。
 3. 在「服务 → Honk」初始化、运行系统检查、配置节点或订阅后启动；初始化完成、服务运行且 API 就绪后，再进入 Doona。Honk 需要 Linux 6.12+、内核 BTF 和相应 eBPF 模块，本固件保留这些依赖。管理入口只应在可信 LAN 内使用，不要暴露到 WAN。
 4. 切回 DAE/DAED 前，先停止 Honk 并关闭其开机自启，再通过 daede 启动所选后端。daede 原有互斥仅覆盖 DAE 与 DAED，不能把它理解为 Honk 与 DAE/DAED 的双向自动互斥；不要同时开启两套透明代理。
@@ -169,20 +171,20 @@ LED migration now follows the installed package's ROM defaults. Compatible custo
 
 `dae` 是独立代理核心；`daed` 是前端和 `dae-wing` 后端，内部另嵌一份 DAE 核心，不会调用系统 `/usr/bin/dae`。只升级 DAED 前端不等于升级这两份核心。
 
-当前核验基线：
+2026-11-04 主机核验基线（每次构建继续跟随维护源 `main`，非永久固定值）：
 
 | 组件 | 版本 / 源码 |
 | --- | --- |
-| 打包仓库 | `0b0e5d671e5748a060fbd79abc2f73733b09f902` |
-| dae / daed | `2026.09.24-r2` |
-| luci-app-daede | `1.15-r6` |
+| 打包仓库 | `1eedcafd1cd4d8a89ac928be6608df76ffb38f78` |
+| dae / daed | `2026.10.30-r1` |
+| luci-app-daede | `1.15-r13` |
 | DAED 前端 | `be4ef873c352a9ec930c877a3a821163f4b4ac0a`，包含 v2.1.1 |
 | dae-wing | `b089b568649f03f909477adb6c7db25535a58782` |
-| 两份 DAE 核心 | 官方 `6f2f2aa66084f3d736e4bf86a327e3523b3cdede` 合并到性能基线 `be2b6047eff8be8da7dfdcd0c007fd6d9f7f5175` |
+| 两份 DAE 核心 | 官方 `29a70280fd7e0e73233e623d6dcd004c245882e2` 合并到性能基线 `be2b6047eff8be8da7dfdcd0c007fd6d9f7f5175` |
 
-已核对两份带 SHA-256 校验的源码包：核心实现一致，仅 `go.mod`、`go.sum` 和 PGO 文件位置有差异；依赖和源码固定信息见上游 `ci/pins.env`。源码包内含已构建的 Web 静态资源，Go/eBPF 后端在我们的固件构建中编译，不安装第三方预编译内核包或额外软件源。
+两份源码归档使用维护源 Makefile 的 SHA-256，依赖和源码组合记录在该提交的 `ci/pins.env`；版本和提交格式在准备阶段核对，下载后再次核验实际归档哈希。源码包内含已构建的 Web 静态资源，Go/eBPF 后端在我们的固件构建中编译，不安装第三方预编译内核包或额外软件源。
 
-`Scripts/Daede.sh` 固定已核验的打包提交；后续跟进上游时更新该提交并重新验证补丁和两组构建，不是永久锁定旧版本。每次 Release 附带 `DAEDE-SOURCE.txt`，便于核对真实构建来源。
+`Scripts/Daede.sh` 使用本次构建统一解析的最新打包提交，保留主包构建、服务互斥和旧配置/订阅迁移补丁；每次准备都严格应用补丁并执行行为回归，未知冲突明确失败。每次 Release 附带 `DAEDE-SOURCE.txt`，记录真实打包提交、组件 pins、包版本、归档 URL/SHA-256 和适配后文件哈希。构建触发时才拉取最新，不等同于上游一提交就自动触发本仓库编译。
 本固件的这三个包请通过 GitHub 重新编译升级；使用 daede 界面的在线包更新可能覆盖本仓库的服务互斥补丁。
 
 ### 后端切换与升级

@@ -26,7 +26,20 @@ permissions: write-all
 
 #CI任务
 jobs:
+  proxy-sources:
+    runs-on: ubuntu-24.04
+    outputs:
+      daede: ${{ steps.resolve.outputs.DAEDE_COMMIT }}
+      honk: ${{ steps.resolve.outputs.HONK_COMMIT }}
+    steps:
+      - uses: actions/checkout@v6
+      - name: Resolve maintained proxy sources once for both matrices
+        id: resolve
+        shell: bash
+        run: python3 Scripts/proxy_sources.py resolve all | tee -a "$GITHUB_OUTPUT"
+
   config:
+    needs: proxy-sources
     name: ${{matrix.CONFIG}}
     strategy:
       fail-fast: false
@@ -43,6 +56,8 @@ jobs:
     with:
       #编译配置
       WRT_CONFIG: ${{matrix.CONFIG}}
+      DAEDE_COMMIT: ${{needs.proxy-sources.outputs.daede}}
+      HONK_COMMIT: ${{needs.proxy-sources.outputs.honk}}
       #默认主题
       WRT_THEME: vantage
       #默认主机名

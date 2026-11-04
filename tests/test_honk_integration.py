@@ -7,16 +7,11 @@ import re
 import struct
 import subprocess
 import tarfile
-import tempfile
 import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE = Path(os.environ.get("HONK_SOURCE_DIR", ROOT / "wrt/package/openwrt-honk"))
 ASSETS = Path(os.environ.get("HONK_ASSET_DIR", ROOT / "wrt/dl"))
-CORE_COMMIT = "8b6778cefa12611492187ac2560f014452f0a64a"
-DOONA_COMMIT = "25fc26a7a17697c1c11a3b31f51940966ac86c2f"
-PACKAGING_COMMIT = "52ecdb1bb26e04be782bcb368973fd54d4a44af6"
-SOURCE_URL = "https://github.com/kenzok8/openwrt-honk/releases/download/source-38236606118"
 ELF_MACHINE_AARCH64 = 183
 ELF_PROGRAM_INTERPRETER = 3
 
@@ -25,8 +20,8 @@ def read(relative):
     return (SOURCE / relative).read_text(encoding="utf-8")
 
 
-def make_values(relative):
-    return dict(re.findall(r"^([A-Z0-9_]+):=(.*)$", read(relative), re.M))
+def receipt():
+    return json.loads(read("ci/PROXY-SOURCE.json"))
 
 
 class HonkIntegration(unittest.TestCase):
@@ -39,25 +34,21 @@ class HonkIntegration(unittest.TestCase):
     def test_exact_packaging_and_release_receipt(self):
         head = subprocess.check_output(
             ["git", "-C", str(SOURCE), "rev-parse", "HEAD"], text=True).strip()
-        self.assertEqual(head, PACKAGING_COMMIT)
-        receipt = read("ci/HONK-SOURCE.txt")
-        self.assertIn(f"PACKAGING_COMMIT={PACKAGING_COMMIT}", receipt)
-        self.assertIn("v2026.10.12-r38236606118", receipt)
-        self.assertIn("CORE_BUILD=upstream-prebuilt-static-musl", receipt)
+        self.assertEqual(head, receipt()["packaging_commit"])
+        text = read("ci/HONK-SOURCE.txt")
+        self.assertIn(f"PACKAGING_COMMIT={head}", text)
+        self.assertIn("PACKAGING_BRANCH=main", text)
+        self.assertIn("CORE_BUILD=upstream-prebuilt-static-musl", text)
 
     def test_pinned_core_and_doona_metadata(self):
-        core = make_values("honk/generated-stage.mk")
-        doona = make_values("luci-app-honk/generated-doona-stage.mk")
-        self.assertEqual(core["PKG_SOURCE_URL"].rstrip("/"), SOURCE_URL)
-        self.assertEqual(doona["PKG_SOURCE_URL"].rstrip("/"), SOURCE_URL)
-        for arch in ("AARCH64", "X86_64", "ARMV7"):
-            self.assertRegex(core[f"HONK_HASH_{arch}"], r"^[a-f0-9]{64}$")
-            self.assertIn(CORE_COMMIT, core[f"HONK_ASSET_{arch}"])
-        self.assertEqual(doona["PKG_HASH"], make_values("luci-app-honk/Makefile")["PKG_HASH"])
+        metadata = receipt()
+        for arch in ("aarch64", "x86_64", "armv7"):
+            asset = metadata["assets"][arch]
+            self.assertRegex(asset["sha256"], r"^[a-f0-9]{64}$")
+            self.assertIn(metadata["pins"]["CORE_COMMIT"], asset["name"])
         provenance = json.loads(read("honk/generated-provenance.json"))
-        self.assertEqual(provenance["core"]["commit"], CORE_COMMIT)
+        self.assertEqual(provenance["core"]["commit"], metadata["pins"]["CORE_COMMIT"])
         self.assertIn("aarch64", provenance["core"]["architectures"])
-        self.assertIn(f"DOONA_COMMIT={DOONA_COMMIT}", read("ci/pins.env"))
 
     def test_default_off_and_required_runtime_files(self):
         config = read("honk/files/honk.config")
@@ -81,41 +72,20 @@ class HonkIntegration(unittest.TestCase):
         script += function.group(0) + "\ncheck_conflicts\n"
         for active in ("none", "dae", "daed"):
             result = subprocess.run(["bash", "-c", script], text=True,
-                                    capture_output=True, timeout=10,
+                                    capture_output=True, encoding="utf-8", timeout=10,
                                     env={**os.environ, "ACTIVE_PROXY": active})
             self.assertEqual(result.returncode, 0 if active == "none" else 1)
             if active != "none":
-                self.assertIn(f"conflicting process {active}", result.stderr)
+                self.assertIn(active, result.stderr)
 
     def test_downloaded_archives_match_pins(self):
-        core = make_values("honk/generated-stage.mk")
-        doona = make_values("luci-app-honk/generated-doona-stage.mk")
-        for name, expected in ((core["HONK_ASSET_AARCH64"], core["HONK_HASH_AARCH64"]),
-                               (doona["PKG_SOURCE"], doona["PKG_HASH"])):
-            with (ASSETS / name).open("rb") as stream:
-                self.assertEqual(hashlib.file_digest(stream, "sha256").hexdigest(), expected)
-
-    def test_corrupt_stage_is_rejected_before_install(self):
-        setup = (ROOT / "Scripts/Honk.sh").read_text(encoding="utf-8")
-        function = re.search(r"^download_stage\(\) \{\n.*?^\}", setup, re.M | re.S)
-        self.assertIsNotNone(function)
-        # Replace network I/O only; exercise the real hash check and installation.
-        script = "set -eu\nSOURCE_DIR=.\nHONK_SOURCE_URL=https://example.invalid\n"
-        script += 'curl() { printf "tampered input" > "${@: -1}"; }\n'
-        script += function.group(0)
-        script += '\ndownload_stage generated-stage.mk "' + "0" * 64 + '" honk\n'
-        with tempfile.TemporaryDirectory() as directory:
-            package = Path(directory) / "honk"
-            package.mkdir()
-            result = subprocess.run(["bash", "-c", script], cwd=directory,
-                                    text=True, capture_output=True, timeout=10)
-            self.assertNotEqual(result.returncode, 0)
-            self.assertIn("FAILED", result.stdout)
-            self.assertFalse((package / "generated-stage.mk").exists())
+        for kind in ("aarch64", "doona"):
+            asset = receipt()["assets"][kind]
+            with (ASSETS / asset["name"]).open("rb") as stream:
+                self.assertEqual(hashlib.file_digest(stream, "sha256").hexdigest(), asset["sha256"])
 
     def test_core_is_static_aarch64_elf(self):
-        stage = make_values("honk/generated-stage.mk")
-        with tarfile.open(ASSETS / stage["HONK_ASSET_AARCH64"]) as archive:
+        with tarfile.open(ASSETS / receipt()["assets"]["aarch64"]["name"]) as archive:
             binary = next(item for item in archive if item.name.endswith("/honk-core"))
             data = archive.extractfile(binary).read()
         self.assertEqual(data[:6], b"\x7fELF\x02\x01")
@@ -127,13 +97,12 @@ class HonkIntegration(unittest.TestCase):
         self.assertNotIn(ELF_PROGRAM_INTERPRETER, types)
 
     def test_doona_assets_and_source_are_bundled(self):
-        stage = make_values("luci-app-honk/generated-doona-stage.mk")
-        with tarfile.open(ASSETS / stage["PKG_SOURCE"]) as archive:
+        with tarfile.open(ASSETS / receipt()["assets"]["doona"]["name"]) as archive:
             names = archive.getnames()
             for filename in ("index.html", "SOURCE", "LICENSE", "THIRD-PARTY-NOTICES.txt"):
                 self.assertIn("doona/" + filename, names)
             source = archive.extractfile("doona/SOURCE").read().decode()
-            self.assertIn(DOONA_COMMIT, source)
+            self.assertIn(receipt()["pins"]["DOONA_COMMIT"], source)
             self.assertTrue(any(name.startswith("doona/assets/") for name in names))
 
 

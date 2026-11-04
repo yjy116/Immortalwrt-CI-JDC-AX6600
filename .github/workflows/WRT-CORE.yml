@@ -4,6 +4,12 @@ name: WRT-CORE
 on:
   workflow_call:
     inputs:
+      DAEDE_COMMIT:
+        required: false
+        type: string
+      HONK_COMMIT:
+        required: false
+        type: string
       WRT_CONFIG:
         required: true
         type: string
@@ -48,6 +54,8 @@ on:
         required: false
         type: string
 env:
+  DAEDE_COMMIT: ${{inputs.DAEDE_COMMIT}}
+  HONK_COMMIT: ${{inputs.HONK_COMMIT}}
   GITHUB_TOKEN: ${{secrets.GITHUB_TOKEN}}
   WRT_CONFIG: ${{inputs.WRT_CONFIG}}
   WRT_THEME: ${{inputs.WRT_THEME}}
@@ -254,6 +262,13 @@ jobs:
 
       - name: 校验 Honk、DAE/DAED 与 USB 打印插件
         run: |
+          timeout 60s python3 -m unittest discover -s tests -p 'test_proxy_*.py' -v
+          timeout 60s bash tests/test_daede_service_guard.sh "$WRT_DIR/package/openwrt-daede"
+          timeout 60s node tests/test_daede_switch.cjs "$WRT_DIR/package/openwrt-daede"
+          timeout 60s bash tests/test_daede_migration.sh
+          HONK_SOURCE_DIR="$WRT_DIR/package/openwrt-honk" timeout 60s python3 -m unittest discover -s tests -p 'test_honk_boot*.py' -v
+          timeout 60s node tests/test_honk_settings.cjs "$WRT_DIR/package/openwrt-honk"
+          timeout 60s node tests/test_honk_overview.cjs "$WRT_DIR/package/openwrt-honk"
           cd "$WRT_DIR"
           for package in honk luci-app-honk dae daed luci-app-daede \
             printer-support kmod-usb-printer p910nd luci-app-usb-printer; do
@@ -269,6 +284,16 @@ jobs:
           cd "$WRT_DIR"
 
           make download -j$(nproc)
+
+      - name: Verify proxy archives and embedded Honk/Doona assets
+        if: env.WRT_TEST != 'true'
+        run: |
+          for source in daede honk; do
+            python3 Scripts/proxy_sources.py verify "$source" \
+              --source "$WRT_DIR/package/openwrt-$source" --downloads "$WRT_DIR/dl"
+          done
+          HONK_SOURCE_DIR="$WRT_DIR/package/openwrt-honk" HONK_ASSET_DIR="$WRT_DIR/dl" \
+            timeout 60s python3 tests/test_honk_integration.py -v
 
       - name: Compile Firmware
         if: env.WRT_TEST != 'true'

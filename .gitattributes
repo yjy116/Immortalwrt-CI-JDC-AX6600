@@ -4,3 +4,4 @@ Scripts/luci_upnp/** text eol=lf
 tests/*luci_upnp* text eol=lf
 tests/fixtures/luci_upnp/** text eol=lf
 patches/fullcone/*.patch text eol=lf -whitespace
+patches/honk/*.patch text eol=lf -whitespace

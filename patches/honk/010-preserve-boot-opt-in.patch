@@ -1,0 +1,240 @@
+diff --git a/honk/files/90-honk-boot b/honk/files/90-honk-boot
+index 3ce34cd..465b033 100644
+--- a/honk/files/90-honk-boot
++++ b/honk/files/90-honk-boot
+@@ -1,7 +1,13 @@
+ #!/bin/sh
+-# 开机自启是内置行为：装上就 enable，是否真正启动由 honk.main.enabled 决定，
+-# 不再提供单独的 boot_enabled 开关。
+-/etc/init.d/honk enable
++# Preserve fresh-install and restored boot preferences without starting services.
++. /lib/functions.sh
++config_load honk
++config_get_bool boot_enabled main boot_enabled 0
++if [ "$boot_enabled" -eq 1 ]; then
++	/etc/init.d/honk enable || exit 1
++else
++	/etc/init.d/honk disable || exit 1
++fi
+ 
+ # 配置模式已取消：只清遗留键，活动配置与启停状态一概不动。
+ legacy_mode=$(uci -q get honk.main.config_mode 2>/dev/null)
+diff --git a/honk/files/control.sh b/honk/files/control.sh
+index e166d08..7b340c3 100755
+--- a/honk/files/control.sh
++++ b/honk/files/control.sh
+@@ -471,7 +471,7 @@ settings() {
+ 	json_get_type clash_secret_type clash_api_secret
+ 	[ "$network_type" = string ] || { echo '{"ok":false,"message":"invalid_lan_network"}'; return 1; }
+ 	case "$port_type" in int|integer) ;; *) echo '{"ok":false,"message":"invalid_listen_port"}'; return 1 ;; esac
+-	# boot_enabled 已内置（恒为 1），前端不再提交，缺省就按当前值处理
++	# Preserve the saved boot preference when the caller omits it.
+ 	case "$boot_enabled_type" in ''|null|boolean) ;; *) echo '{"ok":false,"message":"invalid_boolean_settings"}'; return 1 ;; esac
+ 	case "$clash_enabled_type" in ''|null|boolean) ;; *) echo '{"ok":false,"message":"invalid_clash_api_settings"}'; return 1 ;; esac
+ 	case "$clash_port_type" in ''|null|int|integer) ;; *) echo '{"ok":false,"message":"invalid_clash_api_settings"}'; return 1 ;; esac
+@@ -480,8 +480,7 @@ settings() {
+ 	case "$new_port" in ''|*[!0-9]*) echo '{"ok":false,"message":"invalid_listen_port"}'; return 1 ;; esac
+ 	[ "$new_port" -ge 1024 ] && [ "$new_port" -le 65535 ] || { echo '{"ok":false,"message":"invalid_listen_port"}'; return 1; }
+ 	load_settings
+-	case "$boot_enabled_type" in ''|null) new_boot_enabled=1 ;; esac
+-	new_boot_enabled=1
++	case "$boot_enabled_type" in ''|null) new_boot_enabled=$boot_enabled ;; esac
+ 	case "$clash_enabled_type" in ''|null) new_clash_enabled=$clash_api_enabled ;; esac
+ 	case "$clash_port_type" in ''|null) new_clash_port=$clash_api_port ;; esac
+ 	[ -n "$new_clash_secret" ] || new_clash_secret=$clash_api_secret
+diff --git a/honk/files/honk.init b/honk/files/honk.init
+index 3b7e43b..c706fd5 100755
+--- a/honk/files/honk.init
++++ b/honk/files/honk.init
+@@ -10,8 +10,10 @@ HONK_CONTROL=/usr/share/honk/control.sh
+ HONK_CONFIG=/etc/honk/config.dae
+ 
+ boot() {
+-	# 开机自启内置：只要服务是"已启用 + 已初始化"就起来，
+-	# 用户主动停掉（enabled=0）后重启也不会被强行拉起。
++	local boot_enabled
++	config_load honk
++	config_get_bool boot_enabled main boot_enabled 0
++	[ "$boot_enabled" -eq 1 ] || return 0
+ 	start
+ }
+ 
+diff --git a/luci-app-honk/htdocs/luci-static/resources/view/honk/overview.js b/luci-app-honk/htdocs/luci-static/resources/view/honk/overview.js
+index 2dcc533..648a778 100644
+--- a/luci-app-honk/htdocs/luci-static/resources/view/honk/overview.js
++++ b/luci-app-honk/htdocs/luci-static/resources/view/honk/overview.js
+@@ -226,7 +226,9 @@ return view.extend({
+ 			if (status.lan_network)
+ 				networkSelect.value = status.lan_network;
+ 			portInput.value = status.listen_port ? String(status.listen_port) : '9527';
+-						clashEnabledInput.checked = status.clash_api_enabled === true;
++					clashEnabledInput.checked = status.clash_api_enabled === true;
++			const bootInput = E('input', { 'type': 'checkbox', 'id': 'honk-boot-enabled' });
++			bootInput.checked = status.boot_enabled === true;
+ 			clashPortInput.value = status.clash_api_port ? String(status.clash_api_port) : '9090';
+ 
+ 			card.appendChild(E('h3', { 'class': 'honk-card-title' }, _('Service settings')));
+@@ -242,6 +244,19 @@ return view.extend({
+ 				networkSelect.appendChild(E('option', { 'value': '' }, _('No network interfaces found')));
+ 			form.appendChild(field(_('LAN network'), networkSelect));
+ 			form.appendChild(field(_('Listen port'), portInput));
++			form.appendChild(field(_('Start on boot'), bootInput));
++			if (status.settings_owner === 'file') {
++				const saveBoot = E('button', { 'type': 'button', 'class': 'cbi-button' }, _('Save boot setting'));
++				saveBoot.addEventListener('click', function() {
++					saveBoot.disabled = true;
++					settingsBusy = true;
++					honk.bootSettings(bootInput.checked).then(honk.ensureOk).then(function() {
++						message.textContent = _('Settings saved.');
++					}).catch(function(error) { message.textContent = error.message || String(error); })
++						.finally(function() { settingsBusy = false; saveBoot.disabled = false; });
++				});
++				form.appendChild(saveBoot);
++			}
+ 						form.appendChild(field(_('Enable Clash API'), clashEnabledInput));
+ 			form.appendChild(field(_('Clash API port'), clashPortInput));
+ 			form.appendChild(field(_('Clash API secret'), clashSecretInput, status.clash_api_secret_set ? _('A secret is set. Leave blank to keep it.') : _('Required when enabling. Use 6–128 letters, numbers, dots, underscores or hyphens.')));
+@@ -277,7 +292,7 @@ return view.extend({
+ 				save.disabled = true;
+ 				settingsBusy = true;
+ 				message.textContent = _('Saving…');
+-				honk.settings(networkSelect.value, port, clashEnabledInput.checked, clashPort, clashSecret).then(honk.ensureOk).then(function(result) {
++				honk.settings(networkSelect.value, port, clashEnabledInput.checked, clashPort, clashSecret, bootInput.checked).then(honk.ensureOk).then(function(result) {
+ 					clashSecretInput.value = '';
+ 					message.textContent = honk.resultMessage(result, _('Service settings saved.'));
+ 				}).catch(function(error) {
+diff --git a/luci-app-honk/htdocs/luci-static/resources/view/honk/rpc.js b/luci-app-honk/htdocs/luci-static/resources/view/honk/rpc.js
+index 5aaed20..9c5ca01 100644
+--- a/luci-app-honk/htdocs/luci-static/resources/view/honk/rpc.js
++++ b/luci-app-honk/htdocs/luci-static/resources/view/honk/rpc.js
+@@ -30,7 +30,7 @@ const callRestart = rpc.declare({ object: 'honk', method: 'restart', expect: { '
+ const callSettings = rpc.declare({
+ 	object: 'honk',
+ 	method: 'settings',
+-	params: [ 'lan_network', 'listen_port', 'clash_api_enabled', 'clash_api_port', 'clash_api_secret' ],
++	params: [ 'lan_network', 'listen_port', 'clash_api_enabled', 'clash_api_port', 'clash_api_secret', 'boot_enabled' ],
+ 	expect: { '': {} }
+ });
+ 
+@@ -455,6 +455,7 @@ return baseclass.extend({
+ 	stop: callStop,
+ 	restart: callRestart,
+ 	settings: callSettings,
++	bootSettings: rpc.declare({ object: 'honk', method: 'boot_settings', params: ['boot_enabled'], expect: { '': {} } }),
+ 	probeSubscription: callProbeSubscription,
+ 	addSubscription: callAddSubscription,
+ 	addNodes: callAddNodes,
+diff --git a/luci-app-honk/htdocs/luci-static/resources/view/honk/settings.js b/luci-app-honk/htdocs/luci-static/resources/view/honk/settings.js
+index f259c43..dde4cad 100644
+--- a/luci-app-honk/htdocs/luci-static/resources/view/honk/settings.js
++++ b/luci-app-honk/htdocs/luci-static/resources/view/honk/settings.js
+@@ -46,6 +46,8 @@ return view.extend({
+ 		honk.installStyles();
+ 		const page = E('div', { 'class': 'cbi-map honk-page' });
+ 		const section = E('form', { 'class': 'honk-card' });
++		const bootInput = E('input', { 'type': 'checkbox', 'id': 'honk-boot-enabled' });
++		bootInput.checked = !!(data.status && data.status.boot_enabled === true);
+ 		const networkSelect = E('select', { 'class': 'cbi-input-select', 'name': 'lan_network', 'id': 'honk-lan-network' });
+ 		const portInput = E('input', { 'class': 'cbi-input-text', 'type': 'number', 'name': 'listen_port', 'id': 'honk-listen-port', 'min': '1024', 'max': '65535', 'step': '1' });
+ 				const clashEnabledInput = E('input', { 'type': 'checkbox', 'name': 'clash_api_enabled', 'id': 'honk-clash-enabled' });
+@@ -85,6 +87,20 @@ return view.extend({
+ 			networkSelect.appendChild(E('option', { 'value': '' }, _('No network interfaces found')));
+ 		section.appendChild(field(_('LAN network'), networkSelect));
+ 		section.appendChild(field(_('Listen port'), portInput));
++		section.appendChild(field(_('Start on boot'), bootInput));
++		bootInput.disabled = !!data.statusError || (owner !== 'system' && owner !== 'file');
++		if (owner === 'file') {
++			const saveBoot = E('button', { 'type': 'button', 'id': 'honk-save-boot', 'class': 'cbi-button' }, _('Save boot setting'));
++			saveBoot.disabled = !!data.statusError;
++			saveBoot.addEventListener('click', function() {
++				saveBoot.disabled = true;
++				honk.bootSettings(bootInput.checked).then(honk.ensureOk).then(function() {
++					message.textContent = _('Settings saved.');
++				}).catch(function(error) { message.textContent = error.message || String(error); })
++					.finally(function() { saveBoot.disabled = false; });
++			});
++			section.appendChild(saveBoot);
++		}
+ 				section.appendChild(field(_('Enable Clash API'), clashEnabledInput));
+ 		section.appendChild(field(_('Clash API port'), clashPortInput));
+ 		section.appendChild(field(_('Clash API secret'), clashSecretInput));
+@@ -119,7 +135,7 @@ return view.extend({
+ 
+ 			save.disabled = true;
+ 			message.textContent = _('Saving…');
+-			honk.settings(networkSelect.value, port, clashEnabledInput.checked, clashPort, clashSecret).then(honk.ensureOk).then(function(result) {
++			honk.settings(networkSelect.value, port, clashEnabledInput.checked, clashPort, clashSecret, bootInput.checked).then(honk.ensureOk).then(function(result) {
+ 				clashSecretInput.value = '';
+ 				message.textContent = honk.resultMessage(result, _('Settings saved and applied.'));
+ 			}).catch(function(error) {
+diff --git a/luci-app-honk/root/usr/libexec/rpcd/honk b/luci-app-honk/root/usr/libexec/rpcd/honk
+index d9d3fa8..5d44c77 100755
+--- a/luci-app-honk/root/usr/libexec/rpcd/honk
++++ b/luci-app-honk/root/usr/libexec/rpcd/honk
+@@ -43,6 +43,35 @@ emit_errors() {
+ 	json_dump
+ }
+ 
++store_boot_preference() {
++	local command=disable
++	[ "$1" = 1 ] && command=enable
++	uci set "honk.main.boot_enabled=$1" && uci commit honk && /etc/init.d/honk "$command"
++}
++
++boot_settings() {
++	local request requested kind old
++	request=$(cat)
++	json_load "$request" 2>/dev/null || { emit_result false invalid_request; return 1; }
++	json_get_var requested boot_enabled
++	json_get_type kind boot_enabled
++	case "$kind:$requested" in boolean:0|boolean:1) ;; *) emit_result false invalid_boolean_settings; return 1 ;; esac
++	honk_lock_acquire || { emit_result false operation_in_progress; return 1; }
++	trap 'honk_lock_release >/dev/null 2>&1' 0
++	if [ -e /etc/.honk-maintenance/journal ] || [ -L /etc/.honk-maintenance/journal ]; then
++		emit_result false maintenance_recovery_required; return 1
++	fi
++	if [ -e /etc/.honk-update/journal ] || [ -L /etc/.honk-update/journal ]; then
++		emit_result false update_recovery_required; return 1
++	fi
++	old=$(uci -q get honk.main.boot_enabled) || { emit_result false boot_preference_unavailable; return 1; }
++	case "$old" in 0|1) ;; *) emit_result false invalid_boolean_settings; return 1 ;; esac
++	if store_boot_preference "$requested"; then emit_result true settings_saved; return 0; fi
++	if ! store_boot_preference "$old"; then emit_result false boot_update_and_rollback_failed; return 1; fi
++	emit_result false boot_update_failed_rolled_back
++	return 1
++}
++
+ lock_owner_invalid() {
+ 	[ -d "$HONK_LOCK_DIR" ] || return 1
+ 	lock_owner=$(cat "$HONK_LOCK_DIR/pid" 2>/dev/null)
+@@ -1132,7 +1161,7 @@ config_apply() {
+ 
+ case "$1" in
+ list)
+-		echo '{"status":{},"check":{},"initialize":{"username":"String","password":"String"},"start":{},"stop":{},"restart":{},"settings":{"lan_network":"String","listen_port":"Integer","boot_enabled":"Boolean","clash_api_enabled":"Boolean","clash_api_port":"Integer","clash_api_secret":"String"},"add_subscription":{"name":"String","url":"String"},"probe_subscription":{"url":"String"},"reset_admin":{},"add_nodes":{"links":"String"},"import_dae":{},"config_read":{},"config_draft_read":{},"lan_candidates":{},"config_validate":{"content":"String"},"config_save":{"content":"String"},"config_apply":{},"repair":{},"backup":{},"restore":{},"restore_prepare":{},"reset":{},"job_status":{"job_id":"String"},"logs":{"source":"String","level":"String","limit":"Integer"},"update_check":{},"update_apply":{}}'
++		echo '{"status":{},"check":{},"initialize":{"username":"String","password":"String"},"start":{},"stop":{},"restart":{},"boot_settings":{"boot_enabled":"Boolean"},"settings":{"lan_network":"String","listen_port":"Integer","boot_enabled":"Boolean","clash_api_enabled":"Boolean","clash_api_port":"Integer","clash_api_secret":"String"},"add_subscription":{"name":"String","url":"String"},"probe_subscription":{"url":"String"},"reset_admin":{},"add_nodes":{"links":"String"},"import_dae":{},"config_read":{},"config_draft_read":{},"lan_candidates":{},"config_validate":{"content":"String"},"config_save":{"content":"String"},"config_apply":{},"repair":{},"backup":{},"restore":{},"restore_prepare":{},"reset":{},"job_status":{"job_id":"String"},"logs":{"source":"String","level":"String","limit":"Integer"},"update_check":{},"update_apply":{}}'
+ 		;;
+ 	call)
+ 		case "$2" in
+@@ -1148,6 +1177,9 @@ list)
+ 			settings)
+ 				exec "$CONTROL" settings
+ 				;;
++			boot_settings)
++				boot_settings
++				;;
+ 			probe_subscription)
+ 				probe_subscription
+ 				;;
+diff --git a/luci-app-honk/root/usr/share/rpcd/acl.d/luci-app-honk.json b/luci-app-honk/root/usr/share/rpcd/acl.d/luci-app-honk.json
+index cd17410..323f626 100644
+--- a/luci-app-honk/root/usr/share/rpcd/acl.d/luci-app-honk.json
++++ b/luci-app-honk/root/usr/share/rpcd/acl.d/luci-app-honk.json
+@@ -66,6 +66,7 @@
+ 					"stop",
+ 					"restart",
+ 					"settings",
++					"boot_settings",
+ 					"probe_subscription",
+ 					"add_subscription",
+ 					"add_nodes",
