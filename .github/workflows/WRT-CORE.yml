@@ -267,6 +267,7 @@ jobs:
           timeout 60s node tests/test_daede_switch.cjs "$WRT_DIR/package/openwrt-daede"
           timeout 60s bash tests/test_daede_migration.sh
           HONK_SOURCE_DIR="$WRT_DIR/package/openwrt-honk" timeout 60s python3 -m unittest discover -s tests -p 'test_honk_boot*.py' -v
+          timeout 60s python3 -m unittest discover -s tests -p 'test_honk_rpc_registry.py' -v
           timeout 60s node tests/test_honk_settings.cjs "$WRT_DIR/package/openwrt-honk"
           timeout 60s node tests/test_honk_overview.cjs "$WRT_DIR/package/openwrt-honk"
           cd "$WRT_DIR"

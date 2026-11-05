@@ -49,6 +49,20 @@ def invoke(journal=None, **overrides):
 
 
 class HonkBootRpcTests(unittest.TestCase):
+    def test_rpc_list_preserves_all_upstream_methods(self):
+        text = (SOURCE / RPC_PATH).read_text(encoding="utf-8")
+        upstream = subprocess.run(["git", "-C", str(SOURCE), "show", f"HEAD:{RPC_PATH}"],
+                                  check=True, capture_output=True, text=True,
+                                  encoding="utf-8", timeout=10).stdout
+        registries = []
+        for script in (upstream, text):
+            dispatch = script[script.index('case "$1" in\nlist)'):]
+            result = subprocess.run(["bash", "-c", dispatch, "honk", "list"],
+                                    check=True, capture_output=True, text=True, timeout=10)
+            registries.append(json.loads(result.stdout))
+        self.assertEqual(registries[1], {
+            **registries[0], "boot_settings": {"boot_enabled": "Boolean"}})
+
     def test_unfinished_maintenance_and_update_refuse_writes(self):
         for journal in ("maintenance", "update"):
             result = invoke(journal=journal)
