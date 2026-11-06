@@ -294,6 +294,7 @@ jobs:
               --source "$WRT_DIR/package/openwrt-$source" --downloads "$WRT_DIR/dl"
           done
           HONK_SOURCE_DIR="$WRT_DIR/package/openwrt-honk" HONK_ASSET_DIR="$WRT_DIR/dl" \
+            HONK_FIRMWARE_CONFIG="$WRT_DIR/.config" \
             timeout 60s python3 tests/test_honk_integration.py -v
 
       - name: Compile Firmware

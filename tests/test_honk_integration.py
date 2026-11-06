@@ -12,6 +12,7 @@ import unittest
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE = Path(os.environ.get("HONK_SOURCE_DIR", ROOT / "wrt/package/openwrt-honk"))
 ASSETS = Path(os.environ.get("HONK_ASSET_DIR", ROOT / "wrt/dl"))
+FIRMWARE_CONFIG = Path(os.environ.get("HONK_FIRMWARE_CONFIG", ROOT / "wrt/.config"))
 ELF_MACHINE_AARCH64 = 183
 ELF_PROGRAM_INTERPRETER = 3
 
@@ -57,10 +58,16 @@ class HonkIntegration(unittest.TestCase):
         self.assertIn('"$HONK_CONTROL" preflight || return 1', read("honk/files/honk.init"))
         core = read("honk/Makefile")
         for dependency in ("kmod-sched-bpf", "kmod-veth", "kmod-nft-queue",
-                           "@KERNEL_DEBUG_INFO_BTF", "sqlite3-cli"):
+                           "sqlite3-cli"):
             self.assertIn("+" + dependency, core)
         self.assertIn("/usr/share/honk/provenance.json", core)
         self.assertIn("/usr/share/doona", read("luci-app-honk/Makefile"))
+
+    def test_firmware_embeds_kernel_btf(self):
+        # BTF is a firmware requirement, not an upstream package availability constraint.
+        config = FIRMWARE_CONFIG.read_text(encoding="utf-8")
+        self.assertIn("CONFIG_KERNEL_DEBUG_INFO_BTF=y", config.splitlines(),
+                      "Honk firmware must embed kernel BTF after defconfig")
 
     def test_upstream_conflict_function_rejects_dae_and_daed(self):
         # Exercise the upstream function unchanged; only process lookup is stubbed.
