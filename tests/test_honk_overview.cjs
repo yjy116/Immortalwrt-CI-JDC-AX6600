@@ -19,9 +19,9 @@ function harness() {
   const { nodes, element, document } = createDom();
   const rpcSource = fs.readFileSync(path.join(source,
     'luci-app-honk/htdocs/luci-static/resources/view/honk/rpc.js'), 'utf8');
-  const api = new Function('rpc', 'baseclass', 'E', 'document', rpcSource)(
+  const api = new Function('rpc', 'baseclass', 'E', 'document', 'L', rpcSource)(
     { declare: () => () => { throw new Error('unexpected RPC'); } },
-    { extend: value => value }, element, document);
+    { extend: value => value }, element, document, { env: {} });
   let rejectSave, polls = 0;
   const pending = new Promise((resolve, reject) => { rejectSave = reject; });
   const honk = { ...api, bootSettings: () => pending, ensureOk: value => value,
