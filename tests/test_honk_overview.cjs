@@ -1,6 +1,7 @@
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const { createDom } = require('./honk_dom.cjs');
 
 const source = process.argv[2];
 assert.ok(source, 'pass prepared Honk source');
@@ -15,17 +16,15 @@ function upstreamFunction(name) {
 }
 
 function harness() {
-  const nodes = [];
-  const element = (tag, attrs = {}, children = []) => {
-    const node = { tag, ...attrs, children, events: {},
-      appendChild(child) { this.children = [...this.children, child]; },
-      addEventListener(event, callback) { this.events[event] = callback; } };
-    nodes.push(node);
-    return node;
-  };
+  const { nodes, element, document } = createDom();
+  const rpcSource = fs.readFileSync(path.join(source,
+    'luci-app-honk/htdocs/luci-static/resources/view/honk/rpc.js'), 'utf8');
+  const api = new Function('rpc', 'baseclass', 'E', 'document', rpcSource)(
+    { declare: () => () => { throw new Error('unexpected RPC'); } },
+    { extend: value => value }, element, document);
   let rejectSave, polls = 0;
   const pending = new Promise((resolve, reject) => { rejectSave = reject; });
-  const honk = { bootSettings: () => pending, ensureOk: value => value,
+  const honk = { ...api, bootSettings: () => pending, ensureOk: value => value,
     status: () => { polls++; return Promise.resolve({}); } };
   const code = `const data = { networks: ['lan'] };
     const clashSecret = '';
@@ -42,6 +41,8 @@ function harness() {
 (async () => {
   const page = harness();
   page.renderServiceSettings({ settings_owner: 'file', boot_enabled: false, lan_network: 'lan' });
+  assert.ok(page.nodes.find(node => node.role === 'switch').disabled,
+    'upstream file-owned Clash switch remains read-only');
   const button = page.nodes.find(node => node.tag === 'button' && node.children === 'Save boot setting');
   button.events.click();
   assert.ok(page.isBusy(), 'boot-only save participates in overview busy state');

@@ -63,21 +63,13 @@ diff --git a/luci-app-honk/htdocs/luci-static/resources/view/honk/overview.js b/
 index 2dcc533..648a778 100644
 --- a/luci-app-honk/htdocs/luci-static/resources/view/honk/overview.js
 +++ b/luci-app-honk/htdocs/luci-static/resources/view/honk/overview.js
-@@ -226,7 +226,9 @@ return view.extend({
- 			if (status.lan_network)
- 				networkSelect.value = status.lan_network;
- 			portInput.value = status.listen_port ? String(status.listen_port) : '9527';
--						clashEnabledInput.checked = status.clash_api_enabled === true;
-+					clashEnabledInput.checked = status.clash_api_enabled === true;
+@@ -230,2 +230,4 @@ return view.extend({
+ 			clashPortInput.value = status.clash_api_port ? String(status.clash_api_port) : '9090';
 +			const bootInput = E('input', { 'type': 'checkbox', 'id': 'honk-boot-enabled' });
 +			bootInput.checked = status.boot_enabled === true;
- 			clashPortInput.value = status.clash_api_port ? String(status.clash_api_port) : '9090';
  
- 			card.appendChild(E('h3', { 'class': 'honk-card-title' }, _('Service settings')));
-@@ -242,6 +244,19 @@ return view.extend({
- 				networkSelect.appendChild(E('option', { 'value': '' }, _('No network interfaces found')));
+@@ -243,2 +245,15 @@ return view.extend({
  			form.appendChild(field(_('LAN network'), networkSelect));
- 			form.appendChild(field(_('Listen port'), portInput));
 +			form.appendChild(field(_('Start on boot'), bootInput));
 +			if (status.settings_owner === 'file') {
 +				const saveBoot = E('button', { 'type': 'button', 'class': 'cbi-button' }, _('Save boot setting'));
@@ -91,9 +83,7 @@ index 2dcc533..648a778 100644
 +				});
 +				form.appendChild(saveBoot);
 +			}
- 						form.appendChild(field(_('Enable Clash API'), clashEnabledInput));
- 			form.appendChild(field(_('Clash API port'), clashPortInput));
- 			form.appendChild(field(_('Clash API secret'), clashSecretInput, status.clash_api_secret_set ? _('A secret is set. Leave blank to keep it.') : _('Required when enabling. Use 6–128 letters, numbers, dots, underscores or hyphens.')));
+ 			form.appendChild(field(_('Listen port'), portInput));
 @@ -277,7 +292,7 @@ return view.extend({
  				save.disabled = true;
  				settingsBusy = true;
@@ -128,19 +118,13 @@ diff --git a/luci-app-honk/htdocs/luci-static/resources/view/honk/settings.js b/
 index f259c43..dde4cad 100644
 --- a/luci-app-honk/htdocs/luci-static/resources/view/honk/settings.js
 +++ b/luci-app-honk/htdocs/luci-static/resources/view/honk/settings.js
-@@ -46,6 +46,8 @@ return view.extend({
- 		honk.installStyles();
- 		const page = E('div', { 'class': 'cbi-map honk-page' });
+@@ -48,2 +48,4 @@ return view.extend({
  		const section = E('form', { 'class': 'honk-card' });
 +		const bootInput = E('input', { 'type': 'checkbox', 'id': 'honk-boot-enabled' });
 +		bootInput.checked = !!(data.status && data.status.boot_enabled === true);
  		const networkSelect = E('select', { 'class': 'cbi-input-select', 'name': 'lan_network', 'id': 'honk-lan-network' });
- 		const portInput = E('input', { 'class': 'cbi-input-text', 'type': 'number', 'name': 'listen_port', 'id': 'honk-listen-port', 'min': '1024', 'max': '65535', 'step': '1' });
- 				const clashEnabledInput = E('input', { 'type': 'checkbox', 'name': 'clash_api_enabled', 'id': 'honk-clash-enabled' });
-@@ -85,6 +87,20 @@ return view.extend({
- 			networkSelect.appendChild(E('option', { 'value': '' }, _('No network interfaces found')));
+@@ -86,2 +88,16 @@ return view.extend({
  		section.appendChild(field(_('LAN network'), networkSelect));
- 		section.appendChild(field(_('Listen port'), portInput));
 +		section.appendChild(field(_('Start on boot'), bootInput));
 +		bootInput.disabled = !!data.statusError || (owner !== 'system' && owner !== 'file');
 +		if (owner === 'file') {
@@ -155,9 +139,7 @@ index f259c43..dde4cad 100644
 +			});
 +			section.appendChild(saveBoot);
 +		}
- 				section.appendChild(field(_('Enable Clash API'), clashEnabledInput));
- 		section.appendChild(field(_('Clash API port'), clashPortInput));
- 		section.appendChild(field(_('Clash API secret'), clashSecretInput));
+ 		section.appendChild(field(_('Listen port'), portInput));
 @@ -119,7 +135,7 @@ return view.extend({
  
  			save.disabled = true;
