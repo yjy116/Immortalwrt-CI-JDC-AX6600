@@ -7,7 +7,7 @@ import subprocess
 from pathlib import Path
 
 from proxy_metadata import (REPOSITORIES, checked_commit, checked_hash, daede_metadata,
-                            honk_metadata, pins_values, require, verify_provenance)
+                            honk_metadata, honk_release_asset, pins_values, require, verify_provenance)
 
 
 def run(*args):
@@ -42,30 +42,33 @@ def verify_file(path, expected):
 
 def download_verified(destination, asset):
     temporary = destination.with_suffix(destination.suffix + ".tmp")
+    print(f"Downloading Release asset: {asset['api_url']}", flush=True)
     subprocess.run(["curl", "--fail", "--location", "--show-error", "--silent",
-                    asset["url"], "-o", str(temporary)], check=True)
+                    "--header", "Accept: application/octet-stream",
+                    asset["api_url"], "-o", str(temporary)], check=True)
     verify_file(temporary, asset["sha256"])
     temporary.replace(destination)
 
 
-def honk_provenance(source, metadata, pins):
+def honk_release(source, metadata, pins):
     tag = metadata["source_tag"]
     release = json.loads(run("gh", "api", f"repos/kenzok8/openwrt-honk/releases/tags/{tag}"))
     require(release["tag_name"] == tag and not release["draft"], "Unexpected source release")
     assets = {asset["name"]: asset for asset in release["assets"]}
-    for asset in metadata["assets"].values():
-        remote = assets[asset["name"]]
-        require(remote["digest"] == "sha256:" + asset["sha256"], "Release/Makefile hash mismatch")
+    bound = {name: honk_release_asset(asset, assets[asset["name"]])
+             for name, asset in metadata["assets"].items()}
     remote = assets["generated-provenance.json"]
     digest = remote["digest"]
     require(digest.startswith("sha256:"), "Missing provenance SHA-256")
     url = REPOSITORIES["honk"].removesuffix(".git") + f"/releases/download/{tag}/{remote['name']}"
-    asset = {"url": url, "sha256": checked_hash(digest.removeprefix("sha256:"))}
+    asset = honk_release_asset({"name": "generated-provenance.json", "url": url,
+                                "sha256": checked_hash(digest.removeprefix("sha256:"))}, remote)
     destination = source / "honk/generated-provenance.json"
     download_verified(destination, asset)
     provenance = json.loads(destination.read_text(encoding="utf-8"))
     verify_provenance(provenance, pins)
-    return {"asset": asset, "release_id": release["id"], "content": provenance}
+    return {"assets": bound, "provenance": {
+        "asset": asset, "release_id": release["id"], "content": provenance}}
 
 
 def prepare(source, kind):
@@ -79,7 +82,7 @@ def prepare(source, kind):
         for path in ("honk/generated-stage.mk", "luci-app-honk/generated-doona-stage.mk"):
             require(not (source / path).exists(), f"Unexpected Make override: {path}")
         metadata = honk_metadata(makefiles["honk"], makefiles["luci-app-honk"], pins)
-        metadata = {**metadata, "provenance": honk_provenance(source, metadata, pins),
+        metadata = {**metadata, **honk_release(source, metadata, pins),
                     "core_build": "upstream-prebuilt-static-musl"}
     receipt = {**metadata, "packaging_repository": REPOSITORIES[kind], "packaging_branch": "main",
                "packaging_commit": checked_commit(run("git", "-C", str(source), "rev-parse", "HEAD")),
@@ -105,21 +108,39 @@ def write_receipt(source, kind, receipt, pins_text):
                                                          encoding="utf-8")
 
 
-def verify_downloads(source, downloads):
+def verified_receipt(source):
     receipt = json.loads((source / "ci/PROXY-SOURCE.json").read_text(encoding="utf-8"))
     require(tracked_hashes(source) == receipt["files_sha256"], "Prepared package changed after verification")
+    if "provenance" in receipt:
+        verify_file(source / "honk/generated-provenance.json", receipt["provenance"]["asset"]["sha256"])
+    return receipt
+
+
+def fetch_honk_downloads(source, downloads):
+    receipt = verified_receipt(source)
+    downloads.mkdir(parents=True, exist_ok=True)
+    for name in ("aarch64", "doona"):
+        asset = receipt["assets"][name]
+        destination = downloads / asset["name"]
+        if destination.exists():
+            verify_file(destination, asset["sha256"])
+            print(f"Reusing verified {name}: {asset['name']}")
+        else:
+            download_verified(destination, asset)
+
+
+def verify_downloads(source, downloads):
+    receipt = verified_receipt(source)
     # This firmware is AArch64; other core architectures remain pinned in the receipt.
     for name, asset in receipt["assets"].items():
         if name not in ("x86_64", "armv7"):
             verify_file(downloads / asset["name"], asset["sha256"])
             print(f"Verified {name}: {asset['name']}")
-    if "provenance" in receipt:
-        verify_file(source / "honk/generated-provenance.json", receipt["provenance"]["asset"]["sha256"])
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("command", choices=("resolve", "checkout", "prepare", "verify"))
+    parser.add_argument("command", choices=("resolve", "checkout", "prepare", "fetch", "verify"))
     parser.add_argument("kind", choices=tuple(REPOSITORIES) + ("all",))
     parser.add_argument("--source", type=Path)
     parser.add_argument("--commit")
@@ -138,7 +159,11 @@ def main():
         prepare(args.source, args.kind)
     else:
         require(args.downloads is not None, "downloads required")
-        verify_downloads(args.source, args.downloads)
+        if args.command == "fetch":
+            require(args.kind == "honk", "Release asset staging requires kind honk")
+            fetch_honk_downloads(args.source, args.downloads)
+        else:
+            verify_downloads(args.source, args.downloads)
 
 
 if __name__ == "__main__":

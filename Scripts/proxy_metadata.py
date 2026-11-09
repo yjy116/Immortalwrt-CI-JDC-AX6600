@@ -53,6 +53,18 @@ def source_asset(name, url, digest):
     return {"name": name, "url": f"{url.rstrip('/')}/{name}", "sha256": checked_hash(digest)}
 
 
+def honk_release_asset(expected, remote):
+    asset_id = remote.get("id")
+    require(type(asset_id) is int and asset_id > 0, "Invalid Release asset ID")
+    api_url = f"https://api.github.com/repos/kenzok8/openwrt-honk/releases/assets/{asset_id}"
+    require(remote.get("url") == api_url, "Unexpected Release asset API URL")
+    require(remote.get("name") == expected["name"], "Release asset name mismatch")
+    require(remote.get("browser_download_url") == expected["url"], "Release source URL mismatch")
+    require(remote.get("digest") == "sha256:" + checked_hash(expected["sha256"]),
+            "Release/Makefile hash mismatch")
+    return {**expected, "asset_id": asset_id, "api_url": api_url}
+
+
 def honk_core_assets(text, pins, base):
     require(assignment(text, "CORE_COMMIT") == pins["CORE_COMMIT"], "Honk core pin mismatch")
     require(assignment(text, "PKG_SOURCE") == "$(HONK_ASSET)", "Unknown Honk archive selector")

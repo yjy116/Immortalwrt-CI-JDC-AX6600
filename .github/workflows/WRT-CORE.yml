@@ -282,6 +282,8 @@ jobs:
       - name: Download Packages
         if: env.WRT_TEST != 'true'
         run: |
+          python3 Scripts/proxy_sources.py fetch honk \
+            --source "$WRT_DIR/package/openwrt-honk" --downloads "$WRT_DIR/dl"
           cd "$WRT_DIR"
 
           make download -j$(nproc)

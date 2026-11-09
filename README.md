@@ -97,7 +97,9 @@ USB 打印保留 `luci-app-usb-printer`、`p910nd` 和 `kmod-usb-printer`。上�
 
 构建采用维护源已发布的静态 musl 核心（雅典娜使用 AArch64）和 Doona 静态资源，再由本仓库的 OpenWrt 工具链打包；**不是在本仓库重新编译 Rust 核心**。QCA 工作流在矩阵开始前统一解析 DAEDE/Honk 的最新 `main` 提交，WIFI/NOWIFI 共用本次 SHA，构建中途不再追逐分支变动。`Scripts/Honk.sh` 使用该提交 Makefile 中的 `source-<run_id>` 和 SHA-256，不加载生成的 Makefile 覆盖、不使用可变 `staging` 或 `SKIP`。GitHub Release 的资产摘要必须与 Makefile 一致；来源 JSON 另行校验 SHA-256，并核对核心仓库、提交及架构。下载后再校验实际归档，检查静态 AArch64 核心和 Doona 页面及源码记录。
 
-每次 Release 的 `HONK-SOURCE.txt` 记录实际打包提交、组件 pins、版本、下载 URL/哈希、已适配文件哈希和预编译来源。跟随的是维护源已集成的组合，不是绕过维护者直接追核心开发分支；维护源缺少资产、校验不一致或本地兼容补丁冲突时明确失败，不退回旧版本。上游已移除独立开机开关，本仓库通过 `patches/honk/010-preserve-boot-opt-in.patch` 保留原开关、恢复配置和默认关闭行为，保存其他设置不会强制开启自启。自定义配置文件模式提供独立的自启保存命令，只修改启动偏好和启动链接，不改网络配置或重启服务。
+为避免普通 Release 下载入口的网关错误，来源 JSON、AArch64 核心和 Doona 使用 GitHub 官方 Release asset API 下载。资产编号、名称、原始 URL 和摘要必须对应本次锁定的维护源；核心与界面归档在 `make download` 前写入 `dl`，校验通过才复用缓存。HTTP 错误或哈希不一致直接失败，不切换镜像或版本。
+
+每次 Release 的 `HONK-SOURCE.txt` 记录实际打包提交、组件 pins、版本、原始下载 URL/哈希及 API 资产编号、已适配文件哈希和预编译来源。跟随的是维护源已集成的组合，不是绕过维护者直接追核心开发分支；维护源缺少资产、校验不一致或本地兼容补丁冲突时明确失败，不退回旧版本。上游已移除独立开机开关，本仓库通过 `patches/honk/010-preserve-boot-opt-in.patch` 保留原开关、恢复配置和默认关闭行为，保存其他设置不会强制开启自启。自定义配置文件模式提供独立的自启保存命令，只修改启动偏好和启动链接，不改网络配置或重启服务。
 
 使用说明：
 
