@@ -282,11 +282,10 @@ jobs:
       - name: Download Packages
         if: env.WRT_TEST != 'true'
         run: |
+          timeout 60s python3 tests/test_download_packages.py -v
           python3 Scripts/proxy_sources.py fetch honk \
             --source "$WRT_DIR/package/openwrt-honk" --downloads "$WRT_DIR/dl"
-          cd "$WRT_DIR"
-
-          make download -j$(nproc)
+          bash Scripts/download_packages.sh "$WRT_DIR"
 
       - name: Verify proxy archives and embedded Honk/Doona assets
         if: env.WRT_TEST != 'true'
