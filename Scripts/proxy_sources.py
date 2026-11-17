@@ -43,9 +43,11 @@ def verify_file(path, expected):
 def download_verified(destination, asset):
     temporary = destination.with_suffix(destination.suffix + ".tmp")
     print(f"Downloading Release asset: {asset['api_url']}", flush=True)
-    subprocess.run(["curl", "--fail", "--location", "--show-error", "--silent",
-                    "--header", "Accept: application/octet-stream",
-                    asset["api_url"], "-o", str(temporary)], check=True)
+    # Use the same gh credentials as release metadata, never a token in argv.
+    with temporary.open("wb") as stream:
+        subprocess.run(["gh", "api", "--method", "GET", "--header",
+                        "Accept: application/octet-stream", asset["api_url"]],
+                       stdout=stream, check=True)
     verify_file(temporary, asset["sha256"])
     temporary.replace(destination)
 
