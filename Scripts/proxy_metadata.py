@@ -84,7 +84,8 @@ def honk_metadata(core, ui, pins):
     checked_commit(pins["CORE_COMMIT"])
     checked_commit(pins["DOONA_COMMIT"])
     tag = assignment(core, "HONK_SOURCE_TAG")
-    require(re.fullmatch(r"source-[0-9]+", tag), "Expected immutable source run tag")
+    require(re.fullmatch(r"source-(?:[0-9]+|verified-[0-9]{8})", tag),
+            "Expected versioned source run or verified-date tag")
     require(assignment(ui, "HONK_SOURCE_TAG") == tag, "Honk/Doona source tag mismatch")
     base = REPOSITORIES["honk"].removesuffix(".git") + "/releases/download/" + tag
     for text, name in ((core, "HONK_SOURCE_URL"), (ui, "PKG_SOURCE_URL")):

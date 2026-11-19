@@ -43,6 +43,7 @@ class HonkBootTests(unittest.TestCase):
         for old, kind, requested, expected in ((0, "null", "", 0), (1, "null", "", 1),
                                                 (1, "boolean", 0, 0), (0, "boolean", 1, 1)):
             script = (f"boot_enabled={old}; boot_enabled_type={kind}; new_boot_enabled={requested}\n"
+                      + "settings_runtime_plan() { return 1; }\n"
                       + block + '\nprintf "%s" "$new_boot_enabled"\n')
             result = shell(script)
             self.assertEqual(result.returncode, 0, result.stderr)

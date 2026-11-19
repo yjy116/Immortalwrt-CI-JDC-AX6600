@@ -42,6 +42,23 @@ class MetadataTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 honk_metadata(core, ui, PINS)
 
+    def test_verified_release_tag_keeps_exact_urls_and_hashes(self):
+        tag = "source-verified-20261117"
+        result = honk_metadata(CORE_MAKE.replace("source-123", tag),
+                               UI_MAKE.replace("source-123", tag), PINS)
+        self.assertEqual(result["source_tag"], tag)
+        for asset in result["assets"].values():
+            self.assertEqual(asset["sha256"], HASH)
+            self.assertEqual(asset["url"],
+                f"https://github.com/kenzok8/openwrt-honk/releases/download/{tag}/{asset['name']}")
+
+    def test_unversioned_or_unsafe_source_tags_fail(self):
+        for tag in ("latest", "source-latest", "source-verified-latest", "source-verified-123",
+                    "source-verified-20261117/other", "source-123?tag=other"):
+            with self.subTest(tag=tag), self.assertRaises(ValueError):
+                honk_metadata(CORE_MAKE.replace("source-123", tag),
+                              UI_MAKE.replace("source-123", tag), PINS)
+
     def test_missing_or_skip_hash_fails(self):
         for value in ("SKIP", "", "b" * 63, "$(shell command)"):
             with self.assertRaises(ValueError):
