@@ -13,6 +13,7 @@ ROOT = Path(__file__).resolve().parents[1]
 SOURCE = Path(os.environ.get("HONK_SOURCE_DIR", ROOT / "wrt/package/openwrt-honk"))
 ASSETS = Path(os.environ.get("HONK_ASSET_DIR", ROOT / "wrt/dl"))
 FIRMWARE_CONFIG = Path(os.environ.get("HONK_FIRMWARE_CONFIG", ROOT / "wrt/.config"))
+BOOT_VIEW = "luci-app-honk/htdocs/luci-static/resources/view/honk/boot-policy.js"
 ELF_MACHINE_AARCH64 = 183
 ELF_PROGRAM_INTERPRETER = 3
 
@@ -50,6 +51,10 @@ class HonkIntegration(unittest.TestCase):
         provenance = json.loads(read("honk/generated-provenance.json"))
         self.assertEqual(provenance["core"]["commit"], metadata["pins"]["CORE_COMMIT"])
         self.assertIn("aarch64", provenance["core"]["architectures"])
+
+    def test_boot_view_is_bound_to_the_verified_source_receipt(self):
+        digest = hashlib.sha256((SOURCE / BOOT_VIEW).read_bytes()).hexdigest()
+        self.assertEqual(receipt()["files_sha256"][BOOT_VIEW], digest)
 
     def test_default_off_and_required_runtime_files(self):
         config = read("honk/files/honk.config")

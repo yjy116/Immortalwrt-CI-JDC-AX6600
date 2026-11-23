@@ -6,6 +6,7 @@ import json
 import subprocess
 from pathlib import Path
 
+from honk_boot import BOOT_VIEW
 from proxy_metadata import (REPOSITORIES, checked_commit, checked_hash, daede_metadata,
                             honk_metadata, honk_release_asset, pins_values, require, verify_provenance)
 
@@ -95,7 +96,7 @@ def prepare(source, kind):
 def tracked_hashes(source):
     files = run("git", "-C", str(source), "ls-files").splitlines()
     migration = "luci-app-daede/root/etc/uci-defaults/89-daede-migrate"
-    extra = [migration] if (source / migration).exists() else []
+    extra = [name for name in (migration, BOOT_VIEW.as_posix()) if (source / name).exists()]
     return {name: file_hash(source / name) for name in sorted(set(files + extra))}
 
 

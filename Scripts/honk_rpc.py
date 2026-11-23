@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 """Merge the boot-only RPC declaration without replacing upstream methods."""
-import argparse
 import json
 from pathlib import Path
 import re
@@ -34,18 +33,3 @@ def register_boot_method(text):
     merged = json.dumps({**methods, "boot_settings": BOOT_SCHEMA}, separators=(",", ":"))
     merged = merged.replace("'", r"\u0027")
     return text[:match.start("methods")] + merged + text[match.end("methods"):]
-
-
-def main():
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("source", type=Path)
-    args = parser.parse_args()
-    path = args.source / RPC_PATH
-    text = path.read_text(encoding="utf-8")
-    updated = register_boot_method(text)
-    if updated != text:
-        path.write_text(updated, encoding="utf-8", newline="\n")
-
-
-if __name__ == "__main__":
-    main()
